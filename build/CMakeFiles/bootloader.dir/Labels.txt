@@ -1,0 +1,13 @@
+# Target labels
+ bootloader
+# Source files and their labels
+/home/ibrahim/esp/esp-idf/examples/get-started/iot/build/CMakeFiles/bootloader
+/home/ibrahim/esp/esp-idf/examples/get-started/iot/build/CMakeFiles/bootloader.rule
+/home/ibrahim/esp/esp-idf/examples/get-started/iot/build/CMakeFiles/bootloader-complete.rule
+/home/ibrahim/esp/esp-idf/examples/get-started/iot/build/bootloader-prefix/src/bootloader-stamp/bootloader-install.rule
+/home/ibrahim/esp/esp-idf/examples/get-started/iot/build/bootloader-prefix/src/bootloader-stamp/bootloader-mkdir.rule
+/home/ibrahim/esp/esp-idf/examples/get-started/iot/build/bootloader-prefix/src/bootloader-stamp/bootloader-download.rule
+/home/ibrahim/esp/esp-idf/examples/get-started/iot/build/bootloader-prefix/src/bootloader-stamp/bootloader-update.rule
+/home/ibrahim/esp/esp-idf/examples/get-started/iot/build/bootloader-prefix/src/bootloader-stamp/bootloader-patch.rule
+/home/ibrahim/esp/esp-idf/examples/get-started/iot/build/bootloader-prefix/src/bootloader-stamp/bootloader-configure.rule
+/home/ibrahim/esp/esp-idf/examples/get-started/iot/build/bootloader-prefix/src/bootloader-stamp/bootloader-build.rule

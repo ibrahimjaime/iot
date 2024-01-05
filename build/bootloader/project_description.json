@@ -1,0 +1,20 @@
+{
+    "project_name":       "bootloader",
+    "project_path":       "/home/ibrahim/esp/esp-idf/components/bootloader/subproject",
+    "build_dir":          "/home/ibrahim/esp/esp-idf/examples/get-started/iot/build/bootloader",
+    "config_file":        "/home/ibrahim/esp/esp-idf/examples/get-started/iot/sdkconfig",
+    "config_defaults":    "",
+    "app_elf":            "bootloader.elf",
+    "app_bin":            "bootloader.bin",
+    "git_revision":       "v4.3-dirty",
+    "target":             "esp32",
+    "phy_data_partition": "",
+    "monitor_baud" :      "115200",
+    "monitor_toolprefix": "xtensa-esp32-elf-",
+    "config_environment" : {
+        "COMPONENT_KCONFIGS" : "/home/ibrahim/esp/esp-idf/components/efuse/Kconfig;/home/ibrahim/esp/esp-idf/components/esp32/Kconfig;/home/ibrahim/esp/esp-idf/components/esp_common/Kconfig;/home/ibrahim/esp/esp-idf/components/esp_system/Kconfig;/home/ibrahim/esp/esp-idf/components/log/Kconfig;/home/ibrahim/esp/esp-idf/components/newlib/Kconfig;/home/ibrahim/esp/esp-idf/components/spi_flash/Kconfig",
+        "COMPONENT_KCONFIGS_PROJBUILD" : "/home/ibrahim/esp/esp-idf/components/bootloader/Kconfig.projbuild;/home/ibrahim/esp/esp-idf/components/esptool_py/Kconfig.projbuild;/home/ibrahim/esp/esp-idf/components/partition_table/Kconfig.projbuild"
+    },
+    "build_components" : [ "bootloader", "bootloader_support", "efuse", "esp32", "esp_common", "esp_hw_support", "esp_rom", "esp_system", "esptool_py", "hal", "log", "main", "micro-ecc", "newlib", "partition_table", "soc", "spi_flash", "xtensa", "" ],
+    "build_component_paths" : [ "/home/ibrahim/esp/esp-idf/components/bootloader", "/home/ibrahim/esp/esp-idf/components/bootloader_support", "/home/ibrahim/esp/esp-idf/components/efuse", "/home/ibrahim/esp/esp-idf/components/esp32", "/home/ibrahim/esp/esp-idf/components/esp_common", "/home/ibrahim/esp/esp-idf/components/esp_hw_support", "/home/ibrahim/esp/esp-idf/components/esp_rom", "/home/ibrahim/esp/esp-idf/components/esp_system", "/home/ibrahim/esp/esp-idf/components/esptool_py", "/home/ibrahim/esp/esp-idf/components/hal", "/home/ibrahim/esp/esp-idf/components/log", "/home/ibrahim/esp/esp-idf/components/bootloader/subproject/main", "/home/ibrahim/esp/esp-idf/components/bootloader/subproject/components/micro-ecc", "/home/ibrahim/esp/esp-idf/components/newlib", "/home/ibrahim/esp/esp-idf/components/partition_table", "/home/ibrahim/esp/esp-idf/components/soc", "/home/ibrahim/esp/esp-idf/components/spi_flash", "/home/ibrahim/esp/esp-idf/components/xtensa", "" ]
+}
