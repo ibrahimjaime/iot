@@ -41,12 +41,36 @@ static int retry_cnt = 0;
 float voltOffset = 0.15;
 float LM35 = 0;
 float lux = 0;
-bool lightStatus = false;
 #define MQTT_PUB_TEMP_LUX "iot/temp_lux"
-#define MQTT_SUB_LIGHT "iot/light"
-#define BLINK_GPIO 19//CONFIG_BLINK_GPIO
+#define MQTT_SUB_LIGHT_0 "iot/light0"
+#define MQTT_SUB_LIGHT_1 "iot/light1"
+#define MQTT_SUB_LIGHT_2 "iot/light2"
+#define MQTT_SUB_LIGHT_3 "iot/light3"
+#define MQTT_TOPYC_LEN 3
+#define MQTT_SUB_TOPYC_LEN 6
+#define LIGHT_GPIO 19
+#define LIGHT_GPIO_1 18
+#define LIGHT_GPIO_2 5
+#define LIGHT_GPIO_3 17
 
 uint32_t MQTT_CONNECTED = 0;
+
+void iot_gpio_init(void)
+{
+    gpio_reset_pin(LIGHT_GPIO);
+    gpio_set_direction(LIGHT_GPIO, GPIO_MODE_OUTPUT);
+    gpio_set_level(LIGHT_GPIO, 0);
+    gpio_reset_pin(LIGHT_GPIO_1);
+    gpio_set_direction(LIGHT_GPIO_1, GPIO_MODE_OUTPUT);
+    gpio_set_level(LIGHT_GPIO_1, 0);
+    gpio_reset_pin(LIGHT_GPIO_2);
+    gpio_set_direction(LIGHT_GPIO_2, GPIO_MODE_OUTPUT);
+    gpio_set_level(LIGHT_GPIO_2, 0);
+    gpio_reset_pin(LIGHT_GPIO_3);
+    gpio_set_direction(LIGHT_GPIO_3, GPIO_MODE_OUTPUT);
+    gpio_set_level(LIGHT_GPIO_3, 0);
+}
+
 
 static void mqtt_app_start(void);
 
@@ -125,13 +149,24 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     esp_mqtt_client_handle_t client = event->client;
     int msg_id;
 
+    char topic_received[6];
+
     switch ((esp_mqtt_event_id_t)event_id)
     {
     case MQTT_EVENT_CONNECTED:
         ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
         MQTT_CONNECTED = 1;
-        //new
-        msg_id = esp_mqtt_client_subscribe(client, MQTT_SUB_LIGHT, 0);
+
+        msg_id = esp_mqtt_client_subscribe(client, MQTT_SUB_LIGHT_0, 0);
+        ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
+
+        msg_id = esp_mqtt_client_subscribe(client, MQTT_SUB_LIGHT_1, 0);
+        ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
+
+        msg_id = esp_mqtt_client_subscribe(client, MQTT_SUB_LIGHT_2, 0);
+        ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
+
+        msg_id = esp_mqtt_client_subscribe(client, MQTT_SUB_LIGHT_3, 0);
         ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
         break;
 
@@ -152,14 +187,39 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         ESP_LOGI(TAG, "MQTT_EVENT_DATA");
         printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
         printf("DATA=%.*s\r\n", event->data_len, event->data);
-        if(0 == strcmp("true", event->data)){
-            printf("Light ON\n");
-            gpio_set_level(BLINK_GPIO, 1);
-            lightStatus = true;
-        }else{
-            printf("Light OFF\n");
-            gpio_set_level(BLINK_GPIO, 0);
-            lightStatus = false;
+
+        strncpy(topic_received, event->topic+(MQTT_TOPYC_LEN + 1), MQTT_SUB_TOPYC_LEN);
+
+        if(0 == strcmp("light0", topic_received)){
+            if(0 == strcmp("true", event->data)){
+                gpio_set_level(LIGHT_GPIO, 1);
+            }else{
+                gpio_set_level(LIGHT_GPIO, 0);
+            }
+        }
+        else if(0 == strcmp("light1", topic_received)){
+            if(0 == strcmp("true", event->data)){
+                gpio_set_level(LIGHT_GPIO_1, 1);
+            }else{
+                gpio_set_level(LIGHT_GPIO_1, 0);
+            }
+        }
+        else if(0 == strcmp("light2", topic_received)){
+            if(0 == strcmp("true", event->data)){
+                gpio_set_level(LIGHT_GPIO_2, 1);
+            }else{
+                gpio_set_level(LIGHT_GPIO_2, 0);
+            }
+        }
+        else if(0 == strcmp("light3", topic_received)){
+            if(0 == strcmp("true", event->data)){
+                gpio_set_level(LIGHT_GPIO_3, 1);
+            }else{
+                gpio_set_level(LIGHT_GPIO_3, 0);
+            }
+        }
+        else{
+            printf("Topic not mached!\n");           
         }
         memset(event->data,0, event->data_len);
         break;
@@ -198,8 +258,8 @@ void publisher_task(void *pvParameter)
         sprintf(temp_lux, "{\"temp\": %.2f, \"lux\": %.2f}\n ", temp, lux);
 
         if (MQTT_CONNECTED){
-            printf("Lux %.2f %%\n", lux);
-		    printf("Temperature %.2f degC\n\n", temp);
+            // printf("Lux %.2f %%\n", lux);
+		    // printf("Temperature %.2f degC\n\n", temp);
 			esp_mqtt_client_publish(client, MQTT_PUB_TEMP_LUX, temp_lux, 0, 0, 0);
         }
         vTaskDelay(2000 / portTICK_RATE_MS);
@@ -261,9 +321,7 @@ void app_main()
     esp_log_level_set("*", ESP_LOG_INFO);
     ESP_LOGI("*", "UART test");
     printf("Testing mqtt...\n");
-    gpio_reset_pin(BLINK_GPIO);
-    gpio_set_direction(BLINK_GPIO, GPIO_MODE_OUTPUT);
-    gpio_set_level(BLINK_GPIO, 0);
+    iot_gpio_init();
 	nvs_flash_init();
     wifi_init();
     xTaskCreate(LDR_reader, "LDR_reader", 4096, NULL, 5, NULL);
