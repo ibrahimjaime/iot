@@ -38,8 +38,7 @@ static QueueHandle_t uart0_queue;
 #define MAX_RETRY 10
 static int retry_cnt = 0;
 
-float voltOffset = 0.15;
-float LM35 = 0;
+float LM35_temp = 0;
 float lux = 0;
 #define MQTT_PUB_TEMP_LUX "iot/temp_lux"
 #define MQTT_SUB_LIGHT_0 "iot/light0"
@@ -54,6 +53,9 @@ float lux = 0;
 #define LIGHT_GPIO_3 17
 
 uint32_t MQTT_CONNECTED = 0;
+
+xSemaphoreHandle temp_key = NULL;
+xSemaphoreHandle light_key = NULL;
 
 void iot_gpio_init(void)
 {
@@ -246,21 +248,28 @@ static void mqtt_app_start(void)
 
 void publisher_task(void *pvParameter)
 {
+    char pub_temp_lux[100];
+    float read_temp = 0;
+    float read_light = 0;
+
 	while(1) {
-        float hum = 12;
-	    char humidity[12];
-        sprintf(humidity, "%.2f", hum);
-     
-        float temp = LM35;
-	    char temperature[12];
-        sprintf(temperature, "%.2f", temp);
-		char temp_lux[32];
-        sprintf(temp_lux, "{\"temp\": %.2f, \"lux\": %.2f}\n ", temp, lux);
+        if(light_key != NULL){
+            if(xSemaphoreTake(light_key, pdMS_TO_TICKS(100))){
+                read_light = lux;
+                xSemaphoreGive(light_key);
+            }
+        }
+        if(temp_key != NULL){
+            if(xSemaphoreTake(temp_key, pdMS_TO_TICKS(100))){
+                read_temp = LM35_temp;
+                xSemaphoreGive(temp_key);
+            }
+        }
+        sprintf(pub_temp_lux, "{\"temp\": %.2f, \"lux\": %.2f}\n ", LM35_temp, lux);
 
         if (MQTT_CONNECTED){
-            // printf("Lux %.2f %%\n", lux);
-		    // printf("Temperature %.2f degC\n\n", temp);
-			esp_mqtt_client_publish(client, MQTT_PUB_TEMP_LUX, temp_lux, 0, 0, 0);
+            printf("MQTT_PUB:%s\n", pub_temp_lux);
+			esp_mqtt_client_publish(client, MQTT_PUB_TEMP_LUX, pub_temp_lux, 0, 0, 0);
         }
         vTaskDelay(2000 / portTICK_RATE_MS);
 	}
@@ -281,10 +290,14 @@ static void LDR_reader(void *arg)
     adc1_config_channel_atten(ADC1_CHANNEL_4, ADC_ATTEN_DB_11);
     while (1) 
     {
-        Vref = ((adc1_get_raw(ADC1_CHANNEL_4)*3.3)/4095);
-        LDR = (3.3-Vref)/(Vref/Rref);
-        lux = pow(50000*pow(10,GAMMA)/LDR,(1/GAMMA));
-        //printf("LDR: %0.2f\n",lux);
+        if(light_key != NULL){
+            if(xSemaphoreTake(light_key, pdMS_TO_TICKS(100))){
+                Vref = ((adc1_get_raw(ADC1_CHANNEL_4)*3.3)/4095);
+                LDR = (3.3-Vref)/(Vref/Rref);
+                lux = pow(50000*pow(10,GAMMA)/LDR,(1/GAMMA));
+                xSemaphoreGive(light_key);
+            }
+        }
         vTaskDelay(1000/ portTICK_PERIOD_MS);
     }
 }
@@ -294,14 +307,18 @@ static void LDR_reader(void *arg)
  */
 static void LM35_reader(void *arg)
 {   
-    float volts;
+    float LM35_volt;
     adc1_config_width(ADC_WIDTH_BIT_DEFAULT);
     adc1_config_channel_atten(ADC1_CHANNEL_5, ADC_ATTEN_DB_11);
     while (1) 
-    {   
-        volts = ((adc1_get_raw(ADC1_CHANNEL_5)*3.3)/4095)+0.05;
-        LM35 = (volts/0.01)+4.7;
-        //printf("LM35: %.2f\n",LM35);
+    {
+        if(temp_key != NULL){
+            if(xSemaphoreTake(temp_key, pdMS_TO_TICKS(100))){
+                LM35_volt = ((adc1_get_raw(ADC1_CHANNEL_5)*3.3)/4095)+0.05;
+                LM35_temp = (LM35_volt/0.01)+4.7;
+                xSemaphoreGive(temp_key);
+            }
+        }
         vTaskDelay(1000/ portTICK_PERIOD_MS);
     }
 }
@@ -324,6 +341,8 @@ void app_main()
     iot_gpio_init();
 	nvs_flash_init();
     wifi_init();
+    temp_key = xSemaphoreCreateMutex();
+    light_key = xSemaphoreCreateMutex();
     xTaskCreate(LDR_reader, "LDR_reader", 4096, NULL, 5, NULL);
     xTaskCreate(LM35_reader, "LM35_reader", 4096, NULL, 5, NULL);
 	xTaskCreate(&publisher_task, "publisher_task", 2048, NULL, 5, NULL );
