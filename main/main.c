@@ -251,25 +251,33 @@ void publisher_task(void *pvParameter)
     char pub_temp_lux[100];
     float read_temp = 0;
     float read_light = 0;
+    bool read_new_temp = false;
+    bool read_new_light = false;
 
 	while(1) {
         if(light_key != NULL){
             if(xSemaphoreTake(light_key, pdMS_TO_TICKS(100))){
                 read_light = lux;
                 xSemaphoreGive(light_key);
+                read_new_light = true;
             }
         }
         if(temp_key != NULL){
             if(xSemaphoreTake(temp_key, pdMS_TO_TICKS(100))){
                 read_temp = LM35_temp;
                 xSemaphoreGive(temp_key);
+                read_new_temp = true;
             }
         }
-        sprintf(pub_temp_lux, "{\"temp\": %.2f, \"lux\": %.2f}\n ", LM35_temp, lux);
 
-        if (MQTT_CONNECTED){
-            printf("MQTT_PUB:%s\n", pub_temp_lux);
-			esp_mqtt_client_publish(client, MQTT_PUB_TEMP_LUX, pub_temp_lux, 0, 0, 0);
+        if((read_new_temp == true) && (read_new_light == true)){
+            sprintf(pub_temp_lux, "{\"temp\": %.2f, \"lux\": %.2f}\n ", read_temp, read_light);
+            if (MQTT_CONNECTED){
+                printf("MQTT_PUB:%s\n", pub_temp_lux);
+                esp_mqtt_client_publish(client, MQTT_PUB_TEMP_LUX, pub_temp_lux, 0, 0, 0);
+            }
+            read_new_temp = false;
+            read_new_light = false;
         }
         vTaskDelay(2000 / portTICK_RATE_MS);
 	}
