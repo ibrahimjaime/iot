@@ -25,6 +25,7 @@
 #include "esp_log.h"
 #include "mqtt_client.h"
 #include "math.h"
+#include "driver/mcpwm.h"
 
 #define EX_UART_NUM UART_NUM_0
 #define BUF_SIZE (1024)
@@ -40,22 +41,40 @@ static int retry_cnt = 0;
 
 float LM35_temp = 0;
 float lux = 0;
+float pwm_duty = 0;
+
 #define MQTT_PUB_TEMP_LUX "iot/temp_lux"
 #define MQTT_SUB_LIGHT_0 "iot/light0"
 #define MQTT_SUB_LIGHT_1 "iot/light1"
 #define MQTT_SUB_LIGHT_2 "iot/light2"
 #define MQTT_SUB_LIGHT_3 "iot/light3"
+#define MQTT_SUB_PWM_0 "iot/pwm0"
 #define MQTT_TOPYC_LEN 3
-#define MQTT_SUB_TOPYC_LEN 6
 #define LIGHT_GPIO 19
 #define LIGHT_GPIO_1 18
 #define LIGHT_GPIO_2 5
 #define LIGHT_GPIO_3 17
+#define GPIO_PWM0A_OUT 15
 
 uint32_t MQTT_CONNECTED = 0;
 
 xSemaphoreHandle temp_key = NULL;
 xSemaphoreHandle light_key = NULL;
+
+/**
+ * @brief Convert PWM Duty
+ */
+float convert_pwm_duty(float pwm_duty)
+{   
+    float new_pwm_duty = 0;
+    new_pwm_duty = 100 - pwm_duty;
+    if(new_pwm_duty < 0){
+        new_pwm_duty = 0;
+    }else if (new_pwm_duty > 100){
+        new_pwm_duty = 100;
+    }
+    return new_pwm_duty;
+}
 
 void iot_gpio_init(void)
 {
@@ -73,11 +92,34 @@ void iot_gpio_init(void)
     gpio_set_level(LIGHT_GPIO_3, 0);
 }
 
+/**
+ * @brief Change PWM duty
+ */
+static void change_pwm_duty(mcpwm_unit_t mcpwm_num, mcpwm_timer_t timer_num , float duty_cycle)
+{
+    mcpwm_set_duty(mcpwm_num, timer_num, MCPWM_OPR_A, duty_cycle);
+    mcpwm_set_duty_type(mcpwm_num, timer_num, MCPWM_OPR_A, MCPWM_DUTY_MODE_0); //call this each time, if operator was previously in low/high state
+}
+
+/**
+ * @brief Change PWM init
+ */
+static void pwm_init(void)
+{
+    mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, GPIO_PWM0A_OUT);
+    mcpwm_config_t pwm_config;
+    pwm_config.frequency = 50000;
+    pwm_config.cmpr_a = 0;    //duty cycle of PWMxA = 0
+    pwm_config.counter_mode = MCPWM_UP_COUNTER;
+    pwm_config.duty_mode = MCPWM_DUTY_MODE_0;
+    mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0, &pwm_config);//Configure PWM0A & PWM0B with above settings
+    change_pwm_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, convert_pwm_duty(0));
+    vTaskDelay(1000/ portTICK_PERIOD_MS);
+}
 
 static void mqtt_app_start(void);
 
-static esp_err_t wifi_event_handler(void *arg, esp_event_base_t event_base,
-                                    int32_t event_id, void *event_data)
+static esp_err_t wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
     switch (event_id)
     {
@@ -150,6 +192,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     //new
     esp_mqtt_client_handle_t client = event->client;
     int msg_id;
+    int sub_topic_len = 0;
 
     char topic_received[6];
 
@@ -169,6 +212,9 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
 
         msg_id = esp_mqtt_client_subscribe(client, MQTT_SUB_LIGHT_3, 0);
+        ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
+        
+        msg_id = esp_mqtt_client_subscribe(client, MQTT_SUB_PWM_0, 0);
         ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
         break;
 
@@ -190,7 +236,8 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
         printf("DATA=%.*s\r\n", event->data_len, event->data);
 
-        strncpy(topic_received, event->topic+(MQTT_TOPYC_LEN + 1), MQTT_SUB_TOPYC_LEN);
+        sub_topic_len = event->topic_len - (MQTT_TOPYC_LEN + 1);
+        strncpy(topic_received, event->topic+(MQTT_TOPYC_LEN + 1), sub_topic_len);
 
         if(0 == strcmp("light0", topic_received)){
             if(0 == strcmp("true", event->data)){
@@ -219,6 +266,9 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
             }else{
                 gpio_set_level(LIGHT_GPIO_3, 0);
             }
+        }
+        else if(0 == strcmp("pwm0", topic_received)){
+            pwm_duty = atof(event->data);
         }
         else{
             printf("Topic not mached!\n");           
@@ -331,6 +381,20 @@ static void LM35_reader(void *arg)
     }
 }
 
+/**
+ * @brief PWM Task
+ */
+static void pwm_handler(void *arg)
+{
+    pwm_init();
+    while(1){
+        change_pwm_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, convert_pwm_duty(pwm_duty));
+        vTaskDelay(1000/ portTICK_PERIOD_MS);
+    }
+
+}
+
+
 void app_main()
 {   
     uart_config_t uart_config = {
@@ -353,5 +417,6 @@ void app_main()
     light_key = xSemaphoreCreateMutex();
     xTaskCreate(LDR_reader, "LDR_reader", 4096, NULL, 5, NULL);
     xTaskCreate(LM35_reader, "LM35_reader", 4096, NULL, 5, NULL);
+    xTaskCreate(pwm_handler, "pwm_handler", 4096, NULL, 5, NULL);
 	xTaskCreate(&publisher_task, "publisher_task", 2048, NULL, 5, NULL );
 }
