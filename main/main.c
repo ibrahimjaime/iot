@@ -12,16 +12,13 @@
 #include "sdkconfig.h"
 #include "driver/uart.h"
 #include "driver/adc.h"
-
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "freertos/queue.h"
-
 #include "lwip/sockets.h"
 #include "lwip/dns.h"
 #include "lwip/netdb.h"
-
 #include "esp_log.h"
 #include "mqtt_client.h"
 #include "math.h"
@@ -30,19 +27,9 @@
 #define EX_UART_NUM UART_NUM_0
 #define BUF_SIZE (1024)
 #define RD_BUF_SIZE (BUF_SIZE)
-
-static const char *TAG = "MQTT_EXAMPLE";
-static QueueHandle_t uart0_queue;
-
 #define EXAMPLE_ESP_WIFI_SSID "millokira"//"fabriwifi"//"Utn_WifiPass"
 #define EXAMPLE_ESP_WIFI_PASS "rocki2021"//"iotproject"//"WifiPass**"
 #define MAX_RETRY 10
-static int retry_cnt = 0;
-
-float LM35_temp = 0;
-float lux = 0;
-float pwm_duty = 0;
-
 #define MQTT_PUB_TEMP_LUX "iot/temp_lux"
 #define MQTT_SUB_LIGHT_0 "iot/light0"
 #define MQTT_SUB_LIGHT_1 "iot/light1"
@@ -56,13 +43,29 @@ float pwm_duty = 0;
 #define LIGHT_GPIO_3 17
 #define GPIO_PWM0A_OUT 15
 
+static const char *TAG = "MQTT_EXAMPLE";
+static QueueHandle_t uart0_queue;
+static int retry_cnt = 0;
+float LM35_temp = 0;
+float lux = 0;
+float pwm_duty = 0;
 uint32_t MQTT_CONNECTED = 0;
-
 xSemaphoreHandle temp_key = NULL;
 xSemaphoreHandle light_key = NULL;
+esp_mqtt_client_handle_t client = NULL;
+
+static void mqtt_app_start(void);
+
+
 
 /**
- * @brief Convert PWM Duty
+ * @brief Convertidor de ancho de pulso de PWM, 
+ * invierte el valor ingresado debido al funcionamiento del circuito de potencia.
+ * 
+ * @param float pwm_duty : ancho de pulso deseado.
+ * 
+ * @return 
+ *  - new_pwm_duty : ancho de pulso convertido.
  */
 float convert_pwm_duty(float pwm_duty)
 {   
@@ -76,6 +79,16 @@ float convert_pwm_duty(float pwm_duty)
     return new_pwm_duty;
 }
 
+
+/**
+ * @brief Inicializa puertos digitales utilizados.
+ * 
+ * @par Parameters
+ *    None.
+ * 
+ * @par Returns
+ *    Nothing.
+ */
 void iot_gpio_init(void)
 {
     gpio_reset_pin(LIGHT_GPIO);
@@ -92,17 +105,28 @@ void iot_gpio_init(void)
     gpio_set_level(LIGHT_GPIO_3, 0);
 }
 
+
 /**
- * @brief Change PWM duty
+ * @brief Cambia el ancho de pulso de la señal PWM.
+ * 
+ * @param mcpwm_unit_t mcpwm_num : Unidad MCPWM empleada. 
+ * @param mcpwm_timer_t timer_num : Timer usado como referencia.
+ * @param float duty_cycle : Ancho de pulso.
+ * 
+ * @par Returns
+ *    Nothing.
  */
 static void change_pwm_duty(mcpwm_unit_t mcpwm_num, mcpwm_timer_t timer_num , float duty_cycle)
 {
     mcpwm_set_duty(mcpwm_num, timer_num, MCPWM_OPR_A, duty_cycle);
-    mcpwm_set_duty_type(mcpwm_num, timer_num, MCPWM_OPR_A, MCPWM_DUTY_MODE_0); //call this each time, if operator was previously in low/high state
+    mcpwm_set_duty_type(mcpwm_num, timer_num, MCPWM_OPR_A, MCPWM_DUTY_MODE_0);
 }
 
 /**
- * @brief Change PWM init
+ * @brief Configura el puerto y la señal PWM.
+ * 
+ * @par Returns
+ *    Nothing.
  */
 static void pwm_init(void)
 {
@@ -117,8 +141,12 @@ static void pwm_init(void)
     vTaskDelay(1000/ portTICK_PERIOD_MS);
 }
 
-static void mqtt_app_start(void);
-
+/**
+ * @brief Rutinas para responder ante eventos de WiFi.
+ * 
+ * @return 
+ *  - Código de error.
+ */
 static esp_err_t wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
     switch (event_id)
@@ -133,7 +161,7 @@ static esp_err_t wifi_event_handler(void *arg, esp_event_base_t event_base, int3
         break;
 
     case IP_EVENT_STA_GOT_IP:
-        ESP_LOGI(TAG, "got ip: startibg MQTT Client\n");
+        ESP_LOGI(TAG, "got ip: starting MQTT Client\n");
         mqtt_app_start();
         break;
 
@@ -153,6 +181,12 @@ static esp_err_t wifi_event_handler(void *arg, esp_event_base_t event_base, int3
     return ESP_OK;
 }
 
+/**
+ * @brief Inicialización de WiFi
+ *
+ * @par Returns
+ *    Nothing.
+ */
 void wifi_init(void)
 {
     esp_event_loop_create_default();
@@ -175,127 +209,135 @@ void wifi_init(void)
     esp_wifi_start();
 }
 
-/*
- * @brief Event handler registered to receive MQTT events
+/**
+ * @brief Rutinas para responder ante eventos de MQTT.
  *
- *  This function is called by the MQTT client event loop.
+ *  Esta función es llamanda por los eventos que produce el cliente MQTT.
  *
- * @param handler_args user data registered to the event.
- * @param base Event base for the handler(always MQTT Base in this example).
- * @param event_id The id for the received event.
- * @param event_data The data for the event, esp_mqtt_event_handle_t.
+ * @param handler_args : Datos del usuario registrados al evento.
+ * @param base : Base de eventos que identifica el evento.
+ * @param event_id : id del evento recivido.
+ * @param event_data : Datos del evento.
  */
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
 {
     ESP_LOGD(TAG, "Event dispatched from event loop base=%s, event_id=%d", base, event_id);
     esp_mqtt_event_handle_t event = event_data;
-    //new
     esp_mqtt_client_handle_t client = event->client;
     int msg_id;
     int sub_topic_len = 0;
-
     char topic_received[6];
 
-    switch ((esp_mqtt_event_id_t)event_id)
-    {
-    case MQTT_EVENT_CONNECTED:
-        ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
-        MQTT_CONNECTED = 1;
+    switch ((esp_mqtt_event_id_t)event_id){
+        case MQTT_EVENT_CONNECTED:
+            ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
+            MQTT_CONNECTED = 1;
 
-        msg_id = esp_mqtt_client_subscribe(client, MQTT_SUB_LIGHT_0, 0);
-        ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
+            msg_id = esp_mqtt_client_subscribe(client, MQTT_SUB_LIGHT_0, 0);
+            ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
 
-        msg_id = esp_mqtt_client_subscribe(client, MQTT_SUB_LIGHT_1, 0);
-        ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
+            msg_id = esp_mqtt_client_subscribe(client, MQTT_SUB_LIGHT_1, 0);
+            ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
 
-        msg_id = esp_mqtt_client_subscribe(client, MQTT_SUB_LIGHT_2, 0);
-        ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
+            msg_id = esp_mqtt_client_subscribe(client, MQTT_SUB_LIGHT_2, 0);
+            ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
 
-        msg_id = esp_mqtt_client_subscribe(client, MQTT_SUB_LIGHT_3, 0);
-        ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
-        
-        msg_id = esp_mqtt_client_subscribe(client, MQTT_SUB_PWM_0, 0);
-        ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
-        break;
+            msg_id = esp_mqtt_client_subscribe(client, MQTT_SUB_LIGHT_3, 0);
+            ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
+            
+            msg_id = esp_mqtt_client_subscribe(client, MQTT_SUB_PWM_0, 0);
+            ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
+            break;
 
-    case MQTT_EVENT_DISCONNECTED:
-        ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
-        MQTT_CONNECTED = 0;
-        break;
-    case MQTT_EVENT_SUBSCRIBED:
-        ESP_LOGI(TAG, "MQTT_EVENT_SUBSCRIBED, msg_id=%d", event->msg_id);
-        break;
-    case MQTT_EVENT_UNSUBSCRIBED:
-        ESP_LOGI(TAG, "MQTT_EVENT_UNSUBSCRIBED, msg_id=%d", event->msg_id);
-        break;
-    case MQTT_EVENT_PUBLISHED:
-        ESP_LOGI(TAG, "MQTT_EVENT_PUBLISHED, msg_id=%d", event->msg_id);
-        break;
-    case MQTT_EVENT_DATA:
-        ESP_LOGI(TAG, "MQTT_EVENT_DATA");
-        printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
-        printf("DATA=%.*s\r\n", event->data_len, event->data);
+        case MQTT_EVENT_DISCONNECTED:
+            ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
+            MQTT_CONNECTED = 0;
+            break;
+        case MQTT_EVENT_SUBSCRIBED:
+            ESP_LOGI(TAG, "MQTT_EVENT_SUBSCRIBED, msg_id=%d", event->msg_id);
+            break;
+        case MQTT_EVENT_UNSUBSCRIBED:
+            ESP_LOGI(TAG, "MQTT_EVENT_UNSUBSCRIBED, msg_id=%d", event->msg_id);
+            break;
+        case MQTT_EVENT_PUBLISHED:
+            ESP_LOGI(TAG, "MQTT_EVENT_PUBLISHED, msg_id=%d", event->msg_id);
+            break;
+        case MQTT_EVENT_DATA:
+            ESP_LOGI(TAG, "MQTT_EVENT_DATA");
+            printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
+            printf("DATA=%.*s\r\n", event->data_len, event->data);
 
-        sub_topic_len = event->topic_len - (MQTT_TOPYC_LEN + 1);
-        strncpy(topic_received, event->topic+(MQTT_TOPYC_LEN + 1), sub_topic_len);
+            sub_topic_len = event->topic_len - (MQTT_TOPYC_LEN + 1);
+            strncpy(topic_received, event->topic+(MQTT_TOPYC_LEN + 1), sub_topic_len);
 
-        if(0 == strcmp("light0", topic_received)){
-            if(0 == strcmp("true", event->data)){
-                gpio_set_level(LIGHT_GPIO, 1);
-            }else{
-                gpio_set_level(LIGHT_GPIO, 0);
+            if(0 == strcmp("light0", topic_received)){
+                if(0 == strcmp("true", event->data)){
+                    gpio_set_level(LIGHT_GPIO, 1);
+                }else{
+                    gpio_set_level(LIGHT_GPIO, 0);
+                }
             }
-        }
-        else if(0 == strcmp("light1", topic_received)){
-            if(0 == strcmp("true", event->data)){
-                gpio_set_level(LIGHT_GPIO_1, 1);
-            }else{
-                gpio_set_level(LIGHT_GPIO_1, 0);
+            else if(0 == strcmp("light1", topic_received)){
+                if(0 == strcmp("true", event->data)){
+                    gpio_set_level(LIGHT_GPIO_1, 1);
+                }else{
+                    gpio_set_level(LIGHT_GPIO_1, 0);
+                }
             }
-        }
-        else if(0 == strcmp("light2", topic_received)){
-            if(0 == strcmp("true", event->data)){
-                gpio_set_level(LIGHT_GPIO_2, 1);
-            }else{
-                gpio_set_level(LIGHT_GPIO_2, 0);
+            else if(0 == strcmp("light2", topic_received)){
+                if(0 == strcmp("true", event->data)){
+                    gpio_set_level(LIGHT_GPIO_2, 1);
+                }else{
+                    gpio_set_level(LIGHT_GPIO_2, 0);
+                }
             }
-        }
-        else if(0 == strcmp("light3", topic_received)){
-            if(0 == strcmp("true", event->data)){
-                gpio_set_level(LIGHT_GPIO_3, 1);
-            }else{
-                gpio_set_level(LIGHT_GPIO_3, 0);
+            else if(0 == strcmp("light3", topic_received)){
+                if(0 == strcmp("true", event->data)){
+                    gpio_set_level(LIGHT_GPIO_3, 1);
+                }else{
+                    gpio_set_level(LIGHT_GPIO_3, 0);
+                }
             }
-        }
-        else if(0 == strcmp("pwm0", topic_received)){
-            pwm_duty = atof(event->data);
-        }
-        else{
-            printf("Topic not mached!\n");           
-        }
-        memset(event->data,0, event->data_len);
-        break;
-    case MQTT_EVENT_ERROR:
-        ESP_LOGI(TAG, "MQTT_EVENT_ERROR");
-        break;
-    default:
-        ESP_LOGI(TAG, "Other event id:%d", event->event_id);
-        break;
+            else if(0 == strcmp("pwm0", topic_received)){
+                pwm_duty = atof(event->data);
+            }
+            else{
+                printf("Topic not mached!\n");           
+            }
+            memset(event->data,0, event->data_len);
+            break;
+        case MQTT_EVENT_ERROR:
+            ESP_LOGI(TAG, "MQTT_EVENT_ERROR");
+            break;
+        default:
+            ESP_LOGI(TAG, "Other event id:%d", event->event_id);
+            break;
     }
 }
 
-esp_mqtt_client_handle_t client = NULL;
+/**
+ * @brief Inizialización de MQTT.
+ *  Configura e inicializa el cliente y define la función de respuestas a eventos.
+ * @par Returns
+ *    Nothing.
+ */
 static void mqtt_app_start(void)
 {
     ESP_LOGI(TAG, "STARTING MQTT");
     esp_mqtt_client_config_t mqttConfig = {
-        .uri = "mqtt://192.168.1.5:1883"};////192.168.137.66:1883
+        .uri = "mqtt://192.168.1.5:1883"};
 
     client = esp_mqtt_client_init(&mqttConfig);
     esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, mqtt_event_handler, client);
     esp_mqtt_client_start(client);
 }
 
+/**
+ * @brief Tarea encargada de publicar los datos por MQTT.
+ * 
+ * @par Returns
+ *    Nothing.
+ */
 void publisher_task(void *pvParameter)
 {
     char pub_temp_lux[100];
@@ -335,7 +377,11 @@ void publisher_task(void *pvParameter)
 }
 
 /**
- * @brief ADC
+ * @brief Tarea encargada de leer el puerto analógico 
+ * y procesar los datos del LDR para obtener un valor en lux.
+ * 
+ * @par Returns
+ *    Nothing.
  */
 static void LDR_reader(void *arg)
 {
@@ -361,7 +407,11 @@ static void LDR_reader(void *arg)
 }
 
 /**
- * @brief ADC
+ * @brief Tarea encargada de leer el puerto analógico 
+ * y procesar los datos del sensor LM35 para obtener un valor de temperatura.
+ * 
+ * @par Returns
+ *    Nothing.
  */
 static void LM35_reader(void *arg)
 {   
@@ -382,9 +432,13 @@ static void LM35_reader(void *arg)
 }
 
 /**
- * @brief PWM Task
+ * @brief Tarea encargada establecer el valor 
+ * de ancho de pulso de PWM recibido por MQTT en la salida del microcontrolador.
+ * 
+ * @par Returns
+ *    Nothing.
  */
-static void pwm_handler(void *arg)
+static void set_pwm(void *arg)
 {
     pwm_init();
     while(1){
@@ -394,7 +448,12 @@ static void pwm_handler(void *arg)
 
 }
 
-
+/**
+ * @brief Main
+ * 
+ * @par Returns
+ *    Nothing.
+ */
 void app_main()
 {   
     uart_config_t uart_config = {
@@ -417,6 +476,6 @@ void app_main()
     light_key = xSemaphoreCreateMutex();
     xTaskCreate(LDR_reader, "LDR_reader", 4096, NULL, 5, NULL);
     xTaskCreate(LM35_reader, "LM35_reader", 4096, NULL, 5, NULL);
-    xTaskCreate(pwm_handler, "pwm_handler", 4096, NULL, 5, NULL);
+    xTaskCreate(set_pwm, "set_pwm", 4096, NULL, 5, NULL);
 	xTaskCreate(&publisher_task, "publisher_task", 2048, NULL, 5, NULL );
 }
