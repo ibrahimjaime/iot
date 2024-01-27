@@ -69,6 +69,6 @@ void change_pwm_duty(float duty_cycle)
         mcpwm_set_duty_type(mcpwm_num, timer_num, MCPWM_OPR_A, MCPWM_DUTY_MODE_0);
     }
     else{
-        printf("ERROR: Set PWM before setting duty cycle\n");
+        printf("ERROR: Configure PWM before setting duty cycle\n");
     }
 }

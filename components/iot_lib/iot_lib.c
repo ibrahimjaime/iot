@@ -7,6 +7,7 @@
 #include "mqtt_client.h"
 
 #define MAX_RETRY 10
+#define MQTT_BROKER_URI "mqtt://192.168.1.6:1883"
 #define EXAMPLE_ESP_WIFI_SSID "millokira"//"fabriwifi"//"Utn_WifiPass"
 #define EXAMPLE_ESP_WIFI_PASS "rocki2021"//"iotproject"//"WifiPass**"
 #define MQTT_PUB_TEMP_LUX "iot/temp_lux"
@@ -108,12 +109,12 @@ void wifi_init(void)
  */
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
 {
-    printf("Event dispatched from event loop base=%s, event_id=%d", base, event_id);
+    printf("Event dispatched from event loop base=%s, event_id=%d\n", base, event_id);
     esp_mqtt_event_handle_t event = event_data;
     esp_mqtt_client_handle_t client = event->client;
     int msg_id;
     int sub_topic_len = 0;
-    char topic_received[6];
+    char topic_received[strlen(MQTT_SUB_LIGHT_0)];
 
     switch ((esp_mqtt_event_id_t)event_id){
         case MQTT_EVENT_CONNECTED:
@@ -154,6 +155,10 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
             printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
             printf("DATA=%.*s\r\n", event->data_len, event->data);
 
+            if(event->topic_len > strlen(MQTT_SUB_LIGHT_0)){
+                printf("ERROR unexpected topic_len: %d", event->topic_len);
+                break;
+            }
             sub_topic_len = event->topic_len - (MQTT_TOPYC_LEN + 1);
             strncpy(topic_received, event->topic+(MQTT_TOPYC_LEN + 1), sub_topic_len);
 
@@ -217,7 +222,7 @@ static void mqtt_app_start(void)
 {
     printf("STARTING MQTT");
     esp_mqtt_client_config_t mqttConfig = {
-        .uri = "mqtt://192.168.1.6:1883"};
+        .uri = MQTT_BROKER_URI};
 
     client = esp_mqtt_client_init(&mqttConfig);
     esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, mqtt_event_handler, client);
