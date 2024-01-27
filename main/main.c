@@ -23,6 +23,7 @@
 #include "mqtt_client.h"
 #include "math.h"
 #include "driver/mcpwm.h"
+#include "pwm_lib.h"
 
 #define EX_UART_NUM UART_NUM_0
 #define BUF_SIZE (1024)
@@ -56,30 +57,6 @@ esp_mqtt_client_handle_t client = NULL;
 
 static void mqtt_app_start(void);
 
-
-
-/**
- * @brief Convertidor de ancho de pulso de PWM, 
- * invierte el valor ingresado debido al funcionamiento del circuito de potencia.
- * 
- * @param float pwm_duty : ancho de pulso deseado.
- * 
- * @return 
- *  - new_pwm_duty : ancho de pulso convertido.
- */
-float convert_pwm_duty(float pwm_duty)
-{   
-    float new_pwm_duty = 0;
-    new_pwm_duty = 100 - pwm_duty;
-    if(new_pwm_duty < 0){
-        new_pwm_duty = 0;
-    }else if (new_pwm_duty > 100){
-        new_pwm_duty = 100;
-    }
-    return new_pwm_duty;
-}
-
-
 /**
  * @brief Inicializa puertos digitales utilizados.
  * 
@@ -103,42 +80,6 @@ void iot_gpio_init(void)
     gpio_reset_pin(LIGHT_GPIO_3);
     gpio_set_direction(LIGHT_GPIO_3, GPIO_MODE_OUTPUT);
     gpio_set_level(LIGHT_GPIO_3, 0);
-}
-
-
-/**
- * @brief Cambia el ancho de pulso de la señal PWM.
- * 
- * @param mcpwm_unit_t mcpwm_num : Unidad MCPWM empleada. 
- * @param mcpwm_timer_t timer_num : Timer usado como referencia.
- * @param float duty_cycle : Ancho de pulso.
- * 
- * @par Returns
- *    Nothing.
- */
-static void change_pwm_duty(mcpwm_unit_t mcpwm_num, mcpwm_timer_t timer_num , float duty_cycle)
-{
-    mcpwm_set_duty(mcpwm_num, timer_num, MCPWM_OPR_A, duty_cycle);
-    mcpwm_set_duty_type(mcpwm_num, timer_num, MCPWM_OPR_A, MCPWM_DUTY_MODE_0);
-}
-
-/**
- * @brief Configura el puerto y la señal PWM.
- * 
- * @par Returns
- *    Nothing.
- */
-static void pwm_init(void)
-{
-    mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, GPIO_PWM0A_OUT);
-    mcpwm_config_t pwm_config;
-    pwm_config.frequency = 50000;
-    pwm_config.cmpr_a = 0;    //duty cycle of PWMxA = 0
-    pwm_config.counter_mode = MCPWM_UP_COUNTER;
-    pwm_config.duty_mode = MCPWM_DUTY_MODE_0;
-    mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0, &pwm_config);//Configure PWM0A & PWM0B with above settings
-    change_pwm_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, convert_pwm_duty(0));
-    vTaskDelay(1000/ portTICK_PERIOD_MS);
 }
 
 /**
@@ -325,7 +266,7 @@ static void mqtt_app_start(void)
 {
     ESP_LOGI(TAG, "STARTING MQTT");
     esp_mqtt_client_config_t mqttConfig = {
-        .uri = "mqtt://192.168.1.5:1883"};
+        .uri = "mqtt://192.168.1.6:1883"};
 
     client = esp_mqtt_client_init(&mqttConfig);
     esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, mqtt_event_handler, client);
@@ -440,9 +381,9 @@ static void LM35_reader(void *arg)
  */
 static void set_pwm(void *arg)
 {
-    pwm_init();
+    pwm_setup(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM0A, GPIO_PWM0A_OUT);
     while(1){
-        change_pwm_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, convert_pwm_duty(pwm_duty));
+        change_pwm_duty(pwm_duty);
         vTaskDelay(1000/ portTICK_PERIOD_MS);
     }
 
@@ -468,7 +409,6 @@ void app_main()
     uart_param_config(EX_UART_NUM, &uart_config);
     esp_log_level_set("*", ESP_LOG_INFO);
     ESP_LOGI("*", "UART test");
-    printf("Testing mqtt...\n");
     iot_gpio_init();
 	nvs_flash_init();
     wifi_init();
