@@ -20,15 +20,11 @@
 #include "math.h"
 #include "driver/mcpwm.h"
 #include "pwm_lib.h"
-#include "mqtt_lib.h"
+#include "iot_lib.h"
 
 #define EX_UART_NUM UART_NUM_0
 #define BUF_SIZE (1024)
 #define RD_BUF_SIZE (BUF_SIZE)
-#define LIGHT_GPIO 19
-#define LIGHT_GPIO_1 18
-#define LIGHT_GPIO_2 5
-#define LIGHT_GPIO_3 17
 #define GPIO_PWM0A_OUT 15
 
 static QueueHandle_t uart0_queue;
@@ -37,31 +33,7 @@ float lux = 0;
 float pwm_duty = 0;
 xSemaphoreHandle temp_key = NULL;
 xSemaphoreHandle light_key = NULL;
-
-/**
- * @brief Inicializa puertos digitales utilizados.
- * 
- * @par Parameters
- *    None.
- * 
- * @par Returns
- *    Nothing.
- */
-void iot_gpio_init(void)
-{
-    gpio_reset_pin(LIGHT_GPIO);
-    gpio_set_direction(LIGHT_GPIO, GPIO_MODE_OUTPUT);
-    gpio_set_level(LIGHT_GPIO, 0);
-    gpio_reset_pin(LIGHT_GPIO_1);
-    gpio_set_direction(LIGHT_GPIO_1, GPIO_MODE_OUTPUT);
-    gpio_set_level(LIGHT_GPIO_1, 0);
-    gpio_reset_pin(LIGHT_GPIO_2);
-    gpio_set_direction(LIGHT_GPIO_2, GPIO_MODE_OUTPUT);
-    gpio_set_level(LIGHT_GPIO_2, 0);
-    gpio_reset_pin(LIGHT_GPIO_3);
-    gpio_set_direction(LIGHT_GPIO_3, GPIO_MODE_OUTPUT);
-    gpio_set_level(LIGHT_GPIO_3, 0);
-}
+xSemaphoreHandle pwm_key = NULL;
 
 /**
  * @brief Tarea encargada de publicar los datos por MQTT.
@@ -169,8 +141,20 @@ static void LM35_reader(void *arg)
 static void set_pwm(void *arg)
 {
     pwm_setup(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM0A, GPIO_PWM0A_OUT);
+    float read_pwm = 0;
+    float last_pwm = 0;
     while(1){
-        change_pwm_duty(pwm_duty);
+        if(pwm_key != NULL){
+            if(xSemaphoreTake(pwm_key, pdMS_TO_TICKS(100))){
+                read_pwm = pwm_duty;
+                xSemaphoreGive(pwm_key);
+            }
+        }
+        if (last_pwm != read_pwm)
+        {
+            change_pwm_duty(read_pwm);
+            last_pwm = read_pwm;
+        }
         vTaskDelay(1000/ portTICK_PERIOD_MS);
     }
 
@@ -199,6 +183,7 @@ void app_main()
     wifi_init();
     temp_key = xSemaphoreCreateMutex();
     light_key = xSemaphoreCreateMutex();
+    pwm_key = xSemaphoreCreateMutex();
     xTaskCreate(LDR_reader, "LDR_reader", 4096, NULL, 5, NULL);
     xTaskCreate(LM35_reader, "LM35_reader", 4096, NULL, 5, NULL);
     xTaskCreate(set_pwm, "set_pwm", 4096, NULL, 5, NULL);

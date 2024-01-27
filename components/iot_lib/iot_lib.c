@@ -1,6 +1,6 @@
-/* mqtt_lib.c */
+/* iot_lib.c */
 #include <stdio.h>
-#include "mqtt_lib.h"
+#include "iot_lib.h"
 #include "driver/mcpwm.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
@@ -23,8 +23,10 @@
 
 static int retry_cnt = 0;
 uint32_t MQTT_CONNECTED = 0;
-extern float pwm_duty;
 esp_mqtt_client_handle_t client = NULL;
+
+extern xSemaphoreHandle pwm_key;
+extern float pwm_duty;
 
 /**
  * @brief Rutinas para responder ante eventos de WiFi.
@@ -184,7 +186,12 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
                 }
             }
             else if(0 == strcmp("pwm0", topic_received)){
-                pwm_duty = atof(event->data);
+                if(pwm_key != NULL){
+                    if(xSemaphoreTake(pwm_key, pdMS_TO_TICKS(100))){
+                        pwm_duty = atof(event->data);
+                        xSemaphoreGive(pwm_key);
+                    }
+                }
             }
             else{
                 printf("Topic not mached!\n");           
@@ -223,4 +230,29 @@ void mqtt_publish(const char *data)
         printf("MQTT_PUB:%s\n", data);
         esp_mqtt_client_publish(client, MQTT_PUB_TEMP_LUX, data, 0, 0, 0);
     }
+}
+
+/**
+ * @brief Inicializa puertos digitales.
+ * 
+ * @par Parameters
+ *    None.
+ * 
+ * @par Returns
+ *    Nothing.
+ */
+void iot_gpio_init(void)
+{
+    gpio_reset_pin(LIGHT_GPIO);
+    gpio_set_direction(LIGHT_GPIO, GPIO_MODE_OUTPUT);
+    gpio_set_level(LIGHT_GPIO, 0);
+    gpio_reset_pin(LIGHT_GPIO_1);
+    gpio_set_direction(LIGHT_GPIO_1, GPIO_MODE_OUTPUT);
+    gpio_set_level(LIGHT_GPIO_1, 0);
+    gpio_reset_pin(LIGHT_GPIO_2);
+    gpio_set_direction(LIGHT_GPIO_2, GPIO_MODE_OUTPUT);
+    gpio_set_level(LIGHT_GPIO_2, 0);
+    gpio_reset_pin(LIGHT_GPIO_3);
+    gpio_set_direction(LIGHT_GPIO_3, GPIO_MODE_OUTPUT);
+    gpio_set_level(LIGHT_GPIO_3, 0);
 }
