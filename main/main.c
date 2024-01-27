@@ -2,10 +2,8 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
-#include "esp_wifi.h"
 #include "esp_system.h"
 #include "nvs_flash.h"
-#include "esp_event.h"
 #include "esp_netif.h"
 #include "rom/ets_sys.h"
 #include "driver/gpio.h"
@@ -19,8 +17,6 @@
 #include "lwip/sockets.h"
 #include "lwip/dns.h"
 #include "lwip/netdb.h"
-#include "esp_log.h"
-#include "mqtt_client.h"
 #include "math.h"
 #include "driver/mcpwm.h"
 #include "pwm_lib.h"
@@ -198,8 +194,6 @@ void app_main()
     
     uart_driver_install(EX_UART_NUM, BUF_SIZE * 2, BUF_SIZE * 2, 20, &uart0_queue, 0);
     uart_param_config(EX_UART_NUM, &uart_config);
-    esp_log_level_set("*", ESP_LOG_INFO);
-    ESP_LOGI("*", "UART test");
     iot_gpio_init();
 	nvs_flash_init();
     wifi_init();
