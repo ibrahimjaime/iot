@@ -147,9 +147,9 @@ void app_main()
     
     uart_driver_install(EX_UART_NUM, BUF_SIZE * 2, BUF_SIZE * 2, 20, &uart0_queue, 0);
     uart_param_config(EX_UART_NUM, &uart_config);
-    iot_gpio_init();
 	nvs_flash_init();
-    pwm_setup(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM0A, GPIO_PWM0A_OUT);
+    pwm_setup(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM0A, GPIO_PWM0A_OUT, "storage", "pwm0");
+    iot_gpio_init();
     wifi_init();
     temp_key = xSemaphoreCreateMutex();
     light_key = xSemaphoreCreateMutex();

@@ -27,12 +27,12 @@
 #define LIGHT_GPIO_3 17
 
 static int retry_cnt = 0;
-float pwm_duty = 0;
 uint32_t MQTT_CONNECTED = 0;
 int8_t light0_status;
 int8_t light1_status;
 int8_t light2_status;
 int8_t light3_status;
+int8_t pwm_duty = 0;
 esp_mqtt_client_handle_t client = NULL;
 
 /**
@@ -121,13 +121,13 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     int msg_id;
     int sub_topic_len = 0;
     char topic_received[strlen(MQTT_SUB_LIGHT_0)];
-    float new_pwm_duty;
     esp_err_t nvs_err;
     nvs_handle_t storage_handler;
+    int8_t new_pwm_duty;
 
     switch ((esp_mqtt_event_id_t)event_id){
         case MQTT_EVENT_CONNECTED:
-            printf("MQTT_EVENT_CONNECTED");
+            printf("MQTT_EVENT_CONNECTED\n");
             MQTT_CONNECTED = 1;
 
             msg_id = esp_mqtt_client_subscribe(client, MQTT_SUB_LIGHT_0, 0);
@@ -245,7 +245,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
                 nvs_close(storage_handler);
             }
             else if(0 == strcmp("pwm0", topic_received)){
-                new_pwm_duty = atof(event->data);
+                new_pwm_duty = atoi(event->data);
                 if(new_pwm_duty != pwm_duty)
                 {
                     change_pwm_duty(new_pwm_duty);
@@ -254,7 +254,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
                     if (nvs_err != ESP_OK) {
                         printf("Error (%s) opening NVS handle!\n", esp_err_to_name(nvs_err));
                     }  
-                    nvs_err = nvs_set_i8(storage_handler, "pwm0", atoi(event->data));
+                    nvs_err = nvs_set_i8(storage_handler, "pwm0", new_pwm_duty);
                     printf((nvs_err != ESP_OK) ? "NVS Set Failed!\n" : "NVS Set Done\n");
                     nvs_err = nvs_commit(storage_handler);
                     printf((nvs_err != ESP_OK) ? "NVS Commit Failed!\n" : "NVS Commit Done\n");
@@ -283,7 +283,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
  */
 static void mqtt_app_start(void)
 {
-    printf("STARTING MQTT");
+    printf("STARTING MQTT\n");
     esp_mqtt_client_config_t mqttConfig = {
         .uri = MQTT_BROKER_URI};
 
@@ -301,7 +301,8 @@ void mqtt_publish(const char *data)
 }
 
 /**
- * @brief Inicializa puertos digitales.
+ * @brief Inicializa puertos digitales. 
+ * Y establece estado basado en la información de la flash.
  * 
  * @par Parameters
  *    None.
