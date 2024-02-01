@@ -30,10 +30,8 @@
 static QueueHandle_t uart0_queue;
 float LM35_temp = 0;
 float lux = 0;
-float pwm_duty = 0;
 xSemaphoreHandle temp_key = NULL;
 xSemaphoreHandle light_key = NULL;
-xSemaphoreHandle pwm_key = NULL;
 
 /**
  * @brief Tarea encargada de publicar los datos por MQTT.
@@ -132,35 +130,6 @@ static void LM35_reader(void *arg)
 }
 
 /**
- * @brief Tarea encargada establecer el valor 
- * de ancho de pulso de PWM recibido por MQTT en la salida del microcontrolador.
- * 
- * @par Returns
- *    Nothing.
- */
-static void set_pwm(void *arg)
-{
-    pwm_setup(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM0A, GPIO_PWM0A_OUT);
-    float read_pwm = 0;
-    float last_pwm = 0;
-    while(1){
-        if(pwm_key != NULL){
-            if(xSemaphoreTake(pwm_key, pdMS_TO_TICKS(100))){
-                read_pwm = pwm_duty;
-                xSemaphoreGive(pwm_key);
-            }
-        }
-        if (last_pwm != read_pwm)
-        {
-            change_pwm_duty(read_pwm);
-            last_pwm = read_pwm;
-        }
-        vTaskDelay(1000/ portTICK_PERIOD_MS);
-    }
-
-}
-
-/**
  * @brief Main
  * 
  * @par Returns
@@ -178,14 +147,13 @@ void app_main()
     
     uart_driver_install(EX_UART_NUM, BUF_SIZE * 2, BUF_SIZE * 2, 20, &uart0_queue, 0);
     uart_param_config(EX_UART_NUM, &uart_config);
-    iot_gpio_init();
 	nvs_flash_init();
+    pwm_setup(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM0A, GPIO_PWM0A_OUT, "storage", "pwm0");
+    iot_gpio_init();
     wifi_init();
     temp_key = xSemaphoreCreateMutex();
     light_key = xSemaphoreCreateMutex();
-    pwm_key = xSemaphoreCreateMutex();
     xTaskCreate(LDR_reader, "LDR_reader", 4096, NULL, 5, NULL);
     xTaskCreate(LM35_reader, "LM35_reader", 4096, NULL, 5, NULL);
-    xTaskCreate(set_pwm, "set_pwm", 4096, NULL, 5, NULL);
 	xTaskCreate(&publisher_task, "publisher_task", 2048, NULL, 5, NULL );
 }
