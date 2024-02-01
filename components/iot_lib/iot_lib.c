@@ -320,19 +320,19 @@ void iot_gpio_init(void)
     }
     nvs_err = nvs_get_i8(storage_handler, "light0", &light0_status);
     if (nvs_err != ESP_OK) {
-        printf("Error (%s) opening NVS handle!\n", esp_err_to_name(nvs_err));
+        printf("Error (%s) getting NVS value!\n", esp_err_to_name(nvs_err));
     }
     nvs_err = nvs_get_i8(storage_handler, "light1", &light1_status);
     if (nvs_err != ESP_OK) {
-        printf("Error (%s) opening NVS handle!\n", esp_err_to_name(nvs_err));
+        printf("Error (%s) getting NVS value!\n", esp_err_to_name(nvs_err));
     }
     nvs_err = nvs_get_i8(storage_handler, "light2", &light2_status);
     if (nvs_err != ESP_OK) {
-        printf("Error (%s) opening NVS handle!\n", esp_err_to_name(nvs_err));
+        printf("Error (%s) getting NVS value!\n", esp_err_to_name(nvs_err));
     }
     nvs_err = nvs_get_i8(storage_handler, "light3", &light3_status);
     if (nvs_err != ESP_OK) {
-        printf("Error (%s) opening NVS handle!\n", esp_err_to_name(nvs_err));
+        printf("Error (%s) getting NVS value!\n", esp_err_to_name(nvs_err));
     }
     nvs_close(storage_handler);
 
