@@ -26,6 +26,14 @@
 #define LIGHT_GPIO_2 5
 #define LIGHT_GPIO_3 17
 
+#define MAX_TOPICS 10
+#define MAX_TOPICS_LEN 10
+
+char topics[MAX_TOPICS][MAX_TOPICS_LEN] = {{0}};
+int out_ports[MAX_TOPICS];
+int8_t ports_status[MAX_TOPICS];
+char nvs_namespace[MAX_TOPICS_LEN];
+
 static int retry_cnt = 0;
 uint32_t MQTT_CONNECTED = 0;
 int8_t light0_status;
@@ -300,72 +308,33 @@ void mqtt_publish(const char *data)
     }
 }
 
-/**
- * @brief Inicializa puertos digitales. 
- * Y establece estado basado en la información de la flash.
- * 
- * @par Parameters
- *    None.
- * 
- * @par Returns
- *    Nothing.
- */
-void iot_gpio_init(void)
-{
+void iot_dgt_setup(char * topic, char **subtopics, char * storage_name, int ports[],int out_num){
+    strncpy(topics[0],topic, strlen(topic)+1);
+    strncpy(nvs_namespace,storage_name, strlen(storage_name)+1);
+    for (int i = 1; i < (out_num+1); i++){
+      strncpy(topics[i],subtopics[i-1], strlen(subtopics[i-1])+1);
+      out_ports[i-1] = ports[i-1];
+    }
     esp_err_t nvs_err;
     nvs_handle_t storage_handler;
-    nvs_err = nvs_open("storage", NVS_READWRITE, &storage_handler);
+    nvs_err = nvs_open(storage_name, NVS_READWRITE, &storage_handler);
     if (nvs_err != ESP_OK) {
         printf("Error (%s) opening NVS handle!\n", esp_err_to_name(nvs_err));
     }
-    nvs_err = nvs_get_i8(storage_handler, "light0", &light0_status);
-    if (nvs_err != ESP_OK) {
-        printf("Error (%s) getting NVS value!\n", esp_err_to_name(nvs_err));
-    }
-    nvs_err = nvs_get_i8(storage_handler, "light1", &light1_status);
-    if (nvs_err != ESP_OK) {
-        printf("Error (%s) getting NVS value!\n", esp_err_to_name(nvs_err));
-    }
-    nvs_err = nvs_get_i8(storage_handler, "light2", &light2_status);
-    if (nvs_err != ESP_OK) {
-        printf("Error (%s) getting NVS value!\n", esp_err_to_name(nvs_err));
-    }
-    nvs_err = nvs_get_i8(storage_handler, "light3", &light3_status);
-    if (nvs_err != ESP_OK) {
-        printf("Error (%s) getting NVS value!\n", esp_err_to_name(nvs_err));
+    
+    for (int i = 0; i < (out_num); i++){
+        nvs_err = nvs_get_i8(storage_handler, subtopics[i], &ports_status[i]);
+        if (nvs_err != ESP_OK) {
+            printf("Error (%s) getting NVS value!\n", esp_err_to_name(nvs_err));
+        }
+        gpio_reset_pin(out_ports[i]);
+        gpio_set_direction(out_ports[i], GPIO_MODE_OUTPUT);
+        if((ports_status[i] == 1) || (ports_status[i] == 0)){
+            gpio_set_level(out_ports[i], (uint32_t) ports_status[i]);
+        }
+        else {
+            gpio_set_level(out_ports[i], 0);
+        }
     }
     nvs_close(storage_handler);
-
-    gpio_reset_pin(LIGHT_GPIO);
-    gpio_set_direction(LIGHT_GPIO, GPIO_MODE_OUTPUT);
-    if((light0_status == 1) || (light0_status == 0)){
-        gpio_set_level(LIGHT_GPIO, (uint32_t) light0_status);
-    }
-    else {
-        gpio_set_level(LIGHT_GPIO, 0);
-    }
-    gpio_reset_pin(LIGHT_GPIO_1);
-    gpio_set_direction(LIGHT_GPIO_1, GPIO_MODE_OUTPUT);
-    if((light1_status == 1) || (light1_status == 0)){
-        gpio_set_level(LIGHT_GPIO_1, light1_status);
-    }
-    else {
-        gpio_set_level(LIGHT_GPIO_1, 0);
-    }
-    gpio_reset_pin(LIGHT_GPIO_2);
-    gpio_set_direction(LIGHT_GPIO_2, GPIO_MODE_OUTPUT);
-    if((light2_status == 1) || (light2_status == 0)){
-        gpio_set_level(LIGHT_GPIO_2, light2_status);
-    }
-    else {
-        gpio_set_level(LIGHT_GPIO_2, 0);
-    }
-    gpio_reset_pin(LIGHT_GPIO_3);
-    gpio_set_direction(LIGHT_GPIO_3, GPIO_MODE_OUTPUT);
-    if((light3_status == 1) || (light3_status == 0)){
-        gpio_set_level(LIGHT_GPIO_3, light3_status);
-    }
-    else {
-        gpio_set_level(LIGHT_GPIO_3, 0);
-    }
 }

@@ -137,6 +137,16 @@ static void LM35_reader(void *arg)
  */
 void app_main()
 {   
+    char iot_topic[] = "iot/";
+    char *subtopics[4]={'\0'};
+    subtopics[0]="light0";
+    subtopics[1]="light1";
+    subtopics[2]="light2";
+    subtopics[3]="light3";
+    char storage_nsp[] = "storage";
+    int ports[] = {19, 18, 5, 17};
+    int out_num = 4;
+
     uart_config_t uart_config = {
         .baud_rate = 115200,
         .data_bits = UART_DATA_8_BITS,
@@ -144,13 +154,18 @@ void app_main()
         .stop_bits = UART_STOP_BITS_1,
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE
     };
-    
     uart_driver_install(EX_UART_NUM, BUF_SIZE * 2, BUF_SIZE * 2, 20, &uart0_queue, 0);
     uart_param_config(EX_UART_NUM, &uart_config);
-	nvs_flash_init();
+    
+    nvs_flash_init();
     pwm_setup(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM0A, GPIO_PWM0A_OUT, "storage", "pwm0");
-    iot_gpio_init();
+    
+    iot_dgt_setup(iot_topic, subtopics, storage_nsp, ports, out_num);
+    //iot_pwm_setup();
+    //iot_init();
     wifi_init();
+
+
     temp_key = xSemaphoreCreateMutex();
     light_key = xSemaphoreCreateMutex();
     xTaskCreate(LDR_reader, "LDR_reader", 4096, NULL, 5, NULL);
