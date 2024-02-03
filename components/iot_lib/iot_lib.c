@@ -35,8 +35,8 @@ int out_ports[MAX_TOPICS];
 int topics_num = 0;
 int pwm_topics_num = 0;
 int8_t ports_status[MAX_TOPICS];
-char nvs_namespace[MAX_TOPICS_LEN];
-char pwm_nvs_namespace[MAX_TOPICS_LEN];
+char nvs_namespace[MAX_TOPICS][MAX_TOPICS_LEN];
+char pwm_nvs_namespace[MAX_TOPICS][MAX_TOPICS_LEN];
 
 static int retry_cnt = 0;
 uint32_t MQTT_CONNECTED = 0;
@@ -188,7 +188,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
                         gpio_set_level(out_ports[i], 0);
                         ports_status[i] = 0;
                     }
-                    nvs_err = nvs_open("storage", NVS_READWRITE, &storage_handler);
+                    nvs_err = nvs_open(nvs_namespace[i], NVS_READWRITE, &storage_handler);
                     if (nvs_err != ESP_OK) {
                         printf("Error (%s) opening NVS handle!\n", esp_err_to_name(nvs_err));
                     }
@@ -208,7 +208,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
                     {
                         change_pwm_duty(new_pwm_duty);
                         pwm_duty = new_pwm_duty;
-                        nvs_err = nvs_open("storage", NVS_READWRITE, &storage_handler);
+                        nvs_err = nvs_open(pwm_nvs_namespace[i], NVS_READWRITE, &storage_handler);
                         if (nvs_err != ESP_OK) {
                             printf("Error (%s) opening NVS handle!\n", esp_err_to_name(nvs_err));
                         }  
@@ -261,10 +261,10 @@ void mqtt_publish(const char *data)
 
 void iot_dgt_setup(char **new_topics, char * storage_name, int ports[],int out_num){
     topics_num += out_num;
-    strncpy(nvs_namespace, storage_name, strlen(storage_name)+1);
     for (int i = 0; i < out_num; i++){
-      strncpy(topics[i],new_topics[i], strlen(new_topics[i])+1);
-      out_ports[i] = ports[i];
+        strncpy(nvs_namespace[i], storage_name, strlen(storage_name)+1);
+        strncpy(topics[i],new_topics[i], strlen(new_topics[i])+1);
+        out_ports[i] = ports[i];
     }
     esp_err_t nvs_err;
     nvs_handle_t storage_handler;
@@ -292,7 +292,7 @@ void iot_dgt_setup(char **new_topics, char * storage_name, int ports[],int out_n
 
 void iot_pwm_setup(char * new_pwm_topic, char * storage_name, mcpwm_unit_t new_mcpwm_num,  mcpwm_timer_t new_timer_num, mcpwm_io_signals_t io_signal, int gpio_num){
     pwm_topics_num += 1;
-    strncpy(pwm_nvs_namespace, storage_name, strlen(storage_name)+1);
+    strncpy(pwm_nvs_namespace[pwm_topics_num-1], storage_name, strlen(storage_name)+1);
     strncpy(pwm_topics[pwm_topics_num-1], new_pwm_topic, strlen(new_pwm_topic)+1);
     pwm_setup(new_mcpwm_num, new_timer_num, io_signal, gpio_num, storage_name, new_pwm_topic);
 }
