@@ -146,6 +146,9 @@ void app_main()
     char pwm_topic[] = "iot/pwm0";
     int ports[] = {19, 18, 5, 17};
     int out_num = 4;
+    const char *ssid = "brinet715";//"millokira"//"fabriwifi"//"Utn_WifiPass"
+    const char *pass = "03829f50";//"rocki2021"//"iotproject"//"WifiPass**"
+    const char *uri = "mqtt://192.168.120.32:1883";//"mqtt://192.168.1.6:1883"
 
     uart_config_t uart_config = {
         .baud_rate = 115200,
@@ -161,9 +164,7 @@ void app_main()
     
     iot_dgt_setup(topics, storage_nsp, ports, out_num);
     iot_pwm_setup(pwm_topic, storage_nsp, MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM0A, GPIO_PWM0A_OUT);
-    //iot_init();
-    wifi_init();
-
+    iot_init(ssid, pass, uri);
 
     temp_key = xSemaphoreCreateMutex();
     light_key = xSemaphoreCreateMutex();

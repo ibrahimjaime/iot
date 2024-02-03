@@ -12,22 +12,10 @@
 
 #define MAX_RETRY 10
 #define MQTT_BROKER_URI "mqtt://192.168.120.32:1883"//"mqtt://192.168.1.6:1883"
-#define EXAMPLE_ESP_WIFI_SSID "brinet715"//"millokira"//"fabriwifi"//"Utn_WifiPass"
-#define EXAMPLE_ESP_WIFI_PASS "03829f50"//"rocki2021"//"iotproject"//"WifiPass**"
 #define MQTT_PUB_TEMP_LUX "iot/temp_lux"
-#define MQTT_SUB_LIGHT_0 "iot/light0"
-#define MQTT_SUB_LIGHT_1 "iot/light1"
-#define MQTT_SUB_LIGHT_2 "iot/light2"
-#define MQTT_SUB_LIGHT_3 "iot/light3"
-#define MQTT_SUB_PWM_0 "iot/pwm0"
-#define MQTT_TOPYC_LEN 3
-#define LIGHT_GPIO 19
-#define LIGHT_GPIO_1 18
-#define LIGHT_GPIO_2 5
-#define LIGHT_GPIO_3 17
-
 #define MAX_TOPICS 10
 #define MAX_TOPICS_LEN 15
+#define MAX_URI_LEN 50
 
 char topics[MAX_TOPICS][MAX_TOPICS_LEN] = {{0}};
 char pwm_topics[MAX_TOPICS][MAX_TOPICS_LEN] = {{0}};
@@ -37,6 +25,7 @@ int pwm_topics_num = 0;
 int8_t ports_status[MAX_TOPICS];
 char nvs_namespace[MAX_TOPICS][MAX_TOPICS_LEN];
 char pwm_nvs_namespace[MAX_TOPICS][MAX_TOPICS_LEN];
+char mqtt_uri[MAX_URI_LEN];
 
 static int retry_cnt = 0;
 uint32_t MQTT_CONNECTED = 0;
@@ -93,19 +82,21 @@ void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id
  * @par Returns
  *    Nothing.
  */
-void wifi_init(void)
-{
+void iot_init(const char * conf_wifi_ssid, const char * conf_wifi_pass, const char *conf_uri){
+    strcpy(mqtt_uri, conf_uri);
     esp_event_loop_create_default();
     esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL);
     esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL);
 
     wifi_config_t wifi_config = {
         .sta = {
-            .ssid = EXAMPLE_ESP_WIFI_SSID,
-            .password = EXAMPLE_ESP_WIFI_PASS,
+            .ssid = "",
+            .password = "",
             .threshold.authmode = WIFI_AUTH_WPA2_PSK,
         },
     };
+    strcpy((char*)wifi_config.sta.ssid,conf_wifi_ssid);
+    strcpy((char*)wifi_config.sta.password,conf_wifi_pass);
     esp_netif_init();
     esp_netif_create_default_wifi_sta();
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
@@ -132,7 +123,6 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     esp_mqtt_client_handle_t client = event->client;
     int msg_id;
     int sub_topic_len = 0;
-    char topic_received[strlen(MQTT_SUB_LIGHT_0)];
     esp_err_t nvs_err;
     nvs_handle_t storage_handler;
     int8_t new_pwm_duty;
@@ -171,13 +161,6 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
             printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
             printf("DATA=%.*s\r\n", event->data_len, event->data);
             printf("TOPIC LEN=%d\r\n", event->topic_len);
-
-            if(event->topic_len > strlen(MQTT_SUB_LIGHT_0)){
-                printf("ERROR unexpected topic_len: %d", event->topic_len);
-                break;
-            }
-            sub_topic_len = event->topic_len - (MQTT_TOPYC_LEN + 1);
-            strncpy(topic_received, event->topic+(MQTT_TOPYC_LEN + 1), sub_topic_len);
 
             for (int i = 0; i < topics_num; i++){
                 if(strstr(event->topic, topics[i]) != NULL){
@@ -244,8 +227,7 @@ static void mqtt_app_start(void)
 {
     printf("STARTING MQTT\n");
     esp_mqtt_client_config_t mqttConfig = {
-        .uri = MQTT_BROKER_URI};
-
+        .uri = mqtt_uri};//MQTT_BROKER_URI};
     client = esp_mqtt_client_init(&mqttConfig);
     esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, mqtt_event_handler, client);
     esp_mqtt_client_start(client);
