@@ -21,6 +21,7 @@
 #include "driver/mcpwm.h"
 #include "pwm_lib.h"
 #include "iot_lib.h"
+#include "filters.h"
 
 #define EX_UART_NUM UART_NUM_0
 #define BUF_SIZE (1024)
@@ -45,31 +46,22 @@ void publisher_task(void *pvParameter)
     char pub_temp_lux[100];
     float read_temp = 0;
     float read_light = 0;
-    bool read_new_temp = false;
-    bool read_new_light = false;
 
 	while(1) {
         if(light_key != NULL){
             if(xSemaphoreTake(light_key, pdMS_TO_TICKS(100))){
                 read_light = lux;
                 xSemaphoreGive(light_key);
-                read_new_light = true;
             }
         }
         if(temp_key != NULL){
             if(xSemaphoreTake(temp_key, pdMS_TO_TICKS(100))){
                 read_temp = LM35_temp;
                 xSemaphoreGive(temp_key);
-                read_new_temp = true;
             }
         }
-
-        if((read_new_temp == true) && (read_new_light == true)){
-            sprintf(pub_temp_lux, "{\"temp\": %.2f, \"lux\": %.2f}\n ", read_temp, read_light);
-            mqtt_publish(pub_temp_lux, MQTT_PUB_TEMP_LUX);
-            read_new_temp = false;
-            read_new_light = false;
-        }
+        sprintf(pub_temp_lux, "{\"temp\": %.2f, \"lux\": %.2f}\n ", read_temp, read_light);
+        mqtt_publish(pub_temp_lux, MQTT_PUB_TEMP_LUX);
         vTaskDelay(2000 / portTICK_RATE_MS);
 	}
 
@@ -84,24 +76,34 @@ void publisher_task(void *pvParameter)
  */
 static void LDR_reader(void *arg)
 {
+    struct MovAvrS luxes; //Crea la estructura para el calculo del filtro
+    struct MovAvrS *luxespoint = &luxes; //Crea un puntero a la estructura
+    MovingAvaregeInit(luxespoint,10); //Inicializa la estructura
+    float luxesdata[luxes.N]; //Crea el arreglo de datos con el que se va a trabajar en el filtro
+    for(int j=0;j<luxes.N;j++){ //Inicializa el arreglo de datos en 0
+        luxesdata[j]=0;
+    }
     float LDR = 0; //LDR Resistencia
+    float lux_raw = 0; //Valor de luminocidad antes del filtro
     const int Rref = 9750; //Resistencia de referencia 9.75KΩ
     float Vref = 0;
     const float GAMMA  = 0.7;
-
     adc1_config_width(ADC_WIDTH_BIT_DEFAULT);
     adc1_config_channel_atten(ADC1_CHANNEL_4, ADC_ATTEN_DB_11);
+    TickType_t xLastWakeTime1 = xTaskGetTickCount();
     while (1) 
     {
+        Vref = ((adc1_get_raw(ADC1_CHANNEL_4)*3.3)/4095);
+        LDR = (3.3-Vref)/(Vref/Rref);
+        lux_raw = pow(50000*pow(10,GAMMA)/LDR,(1/GAMMA));
+        MovingAvarageFilter(luxespoint,luxesdata,lux_raw); //Aplicacion del Filtro de media movil
         if(light_key != NULL){
             if(xSemaphoreTake(light_key, pdMS_TO_TICKS(100))){
-                Vref = ((adc1_get_raw(ADC1_CHANNEL_4)*3.3)/4095);
-                LDR = (3.3-Vref)/(Vref/Rref);
-                lux = pow(50000*pow(10,GAMMA)/LDR,(1/GAMMA));
+                lux = luxes.MovAvrResult;
                 xSemaphoreGive(light_key);
             }
         }
-        vTaskDelay(1000/ portTICK_PERIOD_MS);
+        vTaskDelayUntil(&xLastWakeTime1, 1000/ portTICK_PERIOD_MS); //Para forzar un tiempo absoluto entre mediciones
     }
 }
 
@@ -114,19 +116,30 @@ static void LDR_reader(void *arg)
  */
 static void LM35_reader(void *arg)
 {   
-    float LM35_volt;
+    struct MovAvrS temp; //Crea la estructura para el calculo del filtro
+    struct MovAvrS *temppoint = &temp; //Crea un puntero a la estructura
+    MovingAvaregeInit(temppoint,10); //Inicializa la estructura
+    float tempdata[temp.N]; //Crea el arreglo de datos con el que se va a trabajar en el filtro
+    for(int i=0;i<temp.N;i++){ //Inicializa el arreglo de datos en 0
+        tempdata[i]=0;
+    }
+    float LM35_volt = 0; //Lectura del ADC en volts
+    float LM35_raw = 0; //Temperatura del sensor antes del filtro
     adc1_config_width(ADC_WIDTH_BIT_DEFAULT);
     adc1_config_channel_atten(ADC1_CHANNEL_5, ADC_ATTEN_DB_11);
+    TickType_t xLastWakeTime2 = xTaskGetTickCount();
     while (1) 
     {
+        LM35_volt = ((adc1_get_raw(ADC1_CHANNEL_5)*3.3)/4095)+0.05;
+        LM35_raw = (LM35_volt/0.01)+4.7;
+        MovingAvarageFilter(temppoint,tempdata,LM35_raw); //Aplicacion del Filtro de media movil
         if(temp_key != NULL){
-            if(xSemaphoreTake(temp_key, pdMS_TO_TICKS(100))){
-                LM35_volt = ((adc1_get_raw(ADC1_CHANNEL_5)*3.3)/4095)+0.05;
-                LM35_temp = (LM35_volt/0.01)+4.7;
+            if(xSemaphoreTake(temp_key, pdMS_TO_TICKS(100))){ //Si no está tomado el semaforo cambia la variable
+                LM35_temp = temp.MovAvrResult;
                 xSemaphoreGive(temp_key);
             }
         }
-        vTaskDelay(1000/ portTICK_PERIOD_MS);
+        vTaskDelayUntil(&xLastWakeTime2, 1000/ portTICK_PERIOD_MS); //Para forzar un tiempo absoluto entre mediciones
     }
 }
 
