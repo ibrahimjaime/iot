@@ -145,6 +145,7 @@ void app_main()
     topics[3]="iot/light3";
     char storage_nsp[] = "storage";
     char pwm_topic[] = "iot/pwm0";
+    int pwm_freq = 50000;
     int ports[] = {19, 18, 5, 17};
     int out_num = 4;
     const char *ssid = "brinet715";//"millokira"//"fabriwifi"//"Utn_WifiPass"
@@ -164,7 +165,7 @@ void app_main()
     nvs_flash_init();
     
     iot_dgt_setup(topics, storage_nsp, ports, out_num);
-    iot_pwm_setup(pwm_topic, storage_nsp, MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM0A, GPIO_PWM0A_OUT);
+    iot_pwm_setup(pwm_topic, storage_nsp, MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM0A, GPIO_PWM0A_OUT, pwm_freq);
     iot_init(ssid, pass, uri);
 
     temp_key = xSemaphoreCreateMutex();

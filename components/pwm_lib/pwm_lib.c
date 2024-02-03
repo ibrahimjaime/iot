@@ -20,13 +20,13 @@ bool pwm_init = false;
  * @par Returns
  *    Nothing.
  */
-void pwm_setup(mcpwm_unit_t new_mcpwm_num,  mcpwm_timer_t new_timer_num, mcpwm_io_signals_t io_signal, int gpio_num, const char * storage_name, const char * storage_key)
+void pwm_setup(mcpwm_unit_t new_mcpwm_num,  mcpwm_timer_t new_timer_num, mcpwm_io_signals_t io_signal, int freq, int gpio_num, const char * storage_name, const char * storage_key)
 {   
     mcpwm_num = new_mcpwm_num;
     timer_num = new_timer_num;
     mcpwm_gpio_init(mcpwm_num, io_signal, gpio_num);
     mcpwm_config_t pwm_config;
-    pwm_config.frequency = 50000;
+    pwm_config.frequency = freq;
     pwm_config.cmpr_a = 0;    //duty cycle of PWMxA = 0
     pwm_config.counter_mode = MCPWM_UP_COUNTER;
     pwm_config.duty_mode = MCPWM_DUTY_MODE_0;

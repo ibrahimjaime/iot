@@ -270,9 +270,9 @@ void iot_dgt_setup(char **new_topics, char * storage_name, int ports[],int out_n
     nvs_close(storage_handler);
 }
 
-void iot_pwm_setup(char * new_pwm_topic, char * storage_name, mcpwm_unit_t new_mcpwm_num,  mcpwm_timer_t new_timer_num, mcpwm_io_signals_t io_signal, int gpio_num){
+void iot_pwm_setup(char * new_pwm_topic, char * storage_name, mcpwm_unit_t new_mcpwm_num,  mcpwm_timer_t new_timer_num, mcpwm_io_signals_t io_signal, int gpio_num, int freq){
     pwm_topics_num += 1;
     strncpy(pwm_nvs_namespace[pwm_topics_num-1], storage_name, strlen(storage_name)+1);
     strncpy(pwm_topics[pwm_topics_num-1], new_pwm_topic, strlen(new_pwm_topic)+1);
-    pwm_setup(new_mcpwm_num, new_timer_num, io_signal, gpio_num, storage_name, new_pwm_topic);
+    pwm_setup(new_mcpwm_num, new_timer_num, io_signal, freq, gpio_num, storage_name, new_pwm_topic);
 }
