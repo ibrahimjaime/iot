@@ -11,9 +11,9 @@
 #include "nvs.h"
 
 #define MAX_RETRY 10
-#define MQTT_BROKER_URI "mqtt://192.168.1.6:1883"
-#define EXAMPLE_ESP_WIFI_SSID "millokira"//"fabriwifi"//"Utn_WifiPass"
-#define EXAMPLE_ESP_WIFI_PASS "rocki2021"//"iotproject"//"WifiPass**"
+#define MQTT_BROKER_URI "mqtt://192.168.120.32:1883"//"mqtt://192.168.1.6:1883"
+#define EXAMPLE_ESP_WIFI_SSID "brinet715"//"millokira"//"fabriwifi"//"Utn_WifiPass"
+#define EXAMPLE_ESP_WIFI_PASS "03829f50"//"rocki2021"//"iotproject"//"WifiPass**"
 #define MQTT_PUB_TEMP_LUX "iot/temp_lux"
 #define MQTT_SUB_LIGHT_0 "iot/light0"
 #define MQTT_SUB_LIGHT_1 "iot/light1"
@@ -27,10 +27,11 @@
 #define LIGHT_GPIO_3 17
 
 #define MAX_TOPICS 10
-#define MAX_TOPICS_LEN 10
+#define MAX_TOPICS_LEN 15
 
 char topics[MAX_TOPICS][MAX_TOPICS_LEN] = {{0}};
 int out_ports[MAX_TOPICS];
+int subtopic_num;
 int8_t ports_status[MAX_TOPICS];
 char nvs_namespace[MAX_TOPICS_LEN];
 
@@ -137,21 +138,11 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         case MQTT_EVENT_CONNECTED:
             printf("MQTT_EVENT_CONNECTED\n");
             MQTT_CONNECTED = 1;
-
-            msg_id = esp_mqtt_client_subscribe(client, MQTT_SUB_LIGHT_0, 0);
-            printf("sent subscribe successful, msg_id=%d", msg_id);
-
-            msg_id = esp_mqtt_client_subscribe(client, MQTT_SUB_LIGHT_1, 0);
-            printf("sent subscribe successful, msg_id=%d", msg_id);
-
-            msg_id = esp_mqtt_client_subscribe(client, MQTT_SUB_LIGHT_2, 0);
-            printf("sent subscribe successful, msg_id=%d", msg_id);
-
-            msg_id = esp_mqtt_client_subscribe(client, MQTT_SUB_LIGHT_3, 0);
-            printf("sent subscribe successful, msg_id=%d", msg_id);
-            
-            msg_id = esp_mqtt_client_subscribe(client, MQTT_SUB_PWM_0, 0);
-            printf("sent subscribe successful, msg_id=%d", msg_id);
+            for (int i = 0; i < subtopic_num; i++){
+                msg_id = esp_mqtt_client_subscribe(client, topics[i], 0);
+                printf("topic: %s\n", topics[i]);
+                printf("sent subscribe successful, msg_id=%d\n", msg_id);
+            }
             break;
 
         case MQTT_EVENT_DISCONNECTED:
@@ -192,7 +183,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
                 if (nvs_err != ESP_OK) {
                     printf("Error (%s) opening NVS handle!\n", esp_err_to_name(nvs_err));
                 }
-                nvs_err = nvs_set_i8(storage_handler, "light0", light0_status);
+                nvs_err = nvs_set_i8(storage_handler, topics[0], light0_status);
                 printf((nvs_err != ESP_OK) ? "NVS Set Failed!\n" : "NVS Set Done\n");
                 nvs_err = nvs_commit(storage_handler);
                 printf((nvs_err != ESP_OK) ? "NVS Commit Failed!\n" : "NVS Commit Done\n");
@@ -210,7 +201,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
                 if (nvs_err != ESP_OK) {
                     printf("Error (%s) opening NVS handle!\n", esp_err_to_name(nvs_err));
                 }
-                nvs_err = nvs_set_i8(storage_handler, "light1", light1_status);
+                nvs_err = nvs_set_i8(storage_handler, topics[1], light1_status);
                 printf((nvs_err != ESP_OK) ? "NVS Set Failed!\n" : "NVS Set Done\n");
                 nvs_err = nvs_commit(storage_handler);
                 printf((nvs_err != ESP_OK) ? "NVS Commit Failed!\n" : "NVS Commit Done\n");
@@ -228,7 +219,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
                 if (nvs_err != ESP_OK) {
                     printf("Error (%s) opening NVS handle!\n", esp_err_to_name(nvs_err));
                 }
-                nvs_err = nvs_set_i8(storage_handler, "light2", light2_status);
+                nvs_err = nvs_set_i8(storage_handler, topics[2], light2_status);
                 printf((nvs_err != ESP_OK) ? "NVS Set Failed!\n" : "NVS Set Done\n");
                 nvs_err = nvs_commit(storage_handler);
                 printf((nvs_err != ESP_OK) ? "NVS Commit Failed!\n" : "NVS Commit Done\n");
@@ -246,7 +237,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
                 if (nvs_err != ESP_OK) {
                     printf("Error (%s) opening NVS handle!\n", esp_err_to_name(nvs_err));
                 }
-                nvs_err = nvs_set_i8(storage_handler, "light3", light3_status);
+                nvs_err = nvs_set_i8(storage_handler, topics[3], light3_status);
                 printf((nvs_err != ESP_OK) ? "NVS Set Failed!\n" : "NVS Set Done\n");
                 nvs_err = nvs_commit(storage_handler);
                 printf((nvs_err != ESP_OK) ? "NVS Commit Failed!\n" : "NVS Commit Done\n");
@@ -308,12 +299,12 @@ void mqtt_publish(const char *data)
     }
 }
 
-void iot_dgt_setup(char * topic, char **subtopics, char * storage_name, int ports[],int out_num){
-    strncpy(topics[0],topic, strlen(topic)+1);
-    strncpy(nvs_namespace,storage_name, strlen(storage_name)+1);
-    for (int i = 1; i < (out_num+1); i++){
-      strncpy(topics[i],subtopics[i-1], strlen(subtopics[i-1])+1);
-      out_ports[i-1] = ports[i-1];
+void iot_dgt_setup(char **new_topics, char * storage_name, int ports[],int out_num){
+    subtopic_num += out_num;
+    strncpy(nvs_namespace, storage_name, strlen(storage_name)+1);
+    for (int i = 0; i < out_num; i++){
+      strncpy(topics[i],new_topics[i], strlen(new_topics[i])+1);
+      out_ports[i] = ports[i];
     }
     esp_err_t nvs_err;
     nvs_handle_t storage_handler;
@@ -323,7 +314,7 @@ void iot_dgt_setup(char * topic, char **subtopics, char * storage_name, int port
     }
     
     for (int i = 0; i < (out_num); i++){
-        nvs_err = nvs_get_i8(storage_handler, subtopics[i], &ports_status[i]);
+        nvs_err = nvs_get_i8(storage_handler, new_topics[i], &ports_status[i]);
         if (nvs_err != ESP_OK) {
             printf("Error (%s) getting NVS value!\n", esp_err_to_name(nvs_err));
         }

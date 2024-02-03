@@ -1,7 +1,7 @@
 #include "esp_err.h"
 #include "esp_event.h"
 
-void iot_dgt_setup(char * topic, char **subtopics, char * storage_name, int ports[],int out_num);
+void iot_dgt_setup(char **subtopics, char * storage_name, int ports[],int out_num);
 //void iot_pwm_setup(mcpwm_unit_t new_mcpwm_num,  mcpwm_timer_t new_timer_num, mcpwm_io_signals_t io_signal, int gpio_num, const char * storage_name, const char * storage_key);
 //void iot_init();
 void wifi_init(void);

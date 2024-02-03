@@ -137,12 +137,11 @@ static void LM35_reader(void *arg)
  */
 void app_main()
 {   
-    char iot_topic[] = "iot/";
-    char *subtopics[4]={'\0'};
-    subtopics[0]="light0";
-    subtopics[1]="light1";
-    subtopics[2]="light2";
-    subtopics[3]="light3";
+    char *topics[4]={'\0'};
+    topics[0]="iot/light0";
+    topics[1]="iot/light1";
+    topics[2]="iot/light2";
+    topics[3]="iot/light3";
     char storage_nsp[] = "storage";
     int ports[] = {19, 18, 5, 17};
     int out_num = 4;
@@ -160,7 +159,7 @@ void app_main()
     nvs_flash_init();
     pwm_setup(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM0A, GPIO_PWM0A_OUT, "storage", "pwm0");
     
-    iot_dgt_setup(iot_topic, subtopics, storage_nsp, ports, out_num);
+    iot_dgt_setup(topics, storage_nsp, ports, out_num);
     //iot_pwm_setup();
     //iot_init();
     wifi_init();
