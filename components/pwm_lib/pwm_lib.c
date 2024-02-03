@@ -12,6 +12,7 @@ bool pwm_init = false;
  * 
  * @param mcpwm_num new_mcpwm_num : Unidad MCPWM empleada. 
  * @param timer_num new_timer_num : Timer usado como referencia.
+ * @param mcpwm_generator_t new_pwm_operator : Generador de la señal.
  * @param mcpwm_io_signals_t io_signal : Señal de salida de unidad MCPWM.
  * @param int freq : Frecuencia de la señal PWM.
  * @param int gpio_num: Puerto de salida de la señal PWM.
@@ -72,6 +73,9 @@ int8_t convert_pwm_duty(int8_t pwm_duty)
 /**
  * @brief Cambia el ancho de pulso de la señal PWM.
  * 
+ * @param mcpwm_num new_mcpwm_num : Unidad MCPWM empleada. 
+ * @param timer_num new_timer_num : Timer usado como referencia.
+ * @param mcpwm_generator_t new_pwm_operator : Generador de la señal.
  * @param int8_t duty_cycle : Ancho de pulso.
  * 
  * @par Returns

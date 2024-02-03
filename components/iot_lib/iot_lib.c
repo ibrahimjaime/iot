@@ -296,15 +296,14 @@ void iot_dgt_setup(char **new_topics, char * storage_name, int ports[], int out_
 
 /**
  * @brief Inicialización de pwm.
- * @param char* storage_name : nombre de espacio en flash.
  * @param char* new_pwm_topic : Tópico para recibir ancho de pulso por MQTT.
+ * @param char* storage_name : nombre de espacio en flash.
  * @param mcpwm_num new_mcpwm_num : Unidad MCPWM empleada. 
  * @param timer_num new_timer_num : Timer usado como referencia.
+ * @param mcpwm_generator_t new_pwm_operator : Generador de la señal.
  * @param mcpwm_io_signals_t io_signal : Señal de salida de unidad MCPWM.
  * @param int freq : Frecuencia de la señal PWM.
  * @param int gpio_num: Puerto de salida de la señal PWM.
- * @param const char* storage_name : nombre de espacio en flash.
- * @param const char* storage_key : nombre de clave en flash.
  * 
  * @par Returns
  *    Nothing.
@@ -317,5 +316,5 @@ void iot_pwm_setup(char * new_pwm_topic, char * storage_name, mcpwm_unit_t new_m
     timer_num[pwm_topics_num-1] = new_timer_num;
     pwm_operator[pwm_topics_num-1] = new_pwm_operator;
     io_signals[pwm_topics_num-1] = io_signal;
-    pwm_setup(new_mcpwm_num, new_timer_num, new_pwm_operator,io_signal, freq, gpio_num, storage_name, new_pwm_topic);
+    pwm_setup(new_mcpwm_num, new_timer_num, new_pwm_operator, io_signal, freq, gpio_num, storage_name, new_pwm_topic);
 }
