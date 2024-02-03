@@ -26,6 +26,7 @@
 #define BUF_SIZE (1024)
 #define RD_BUF_SIZE (BUF_SIZE)
 #define GPIO_PWM0A_OUT 15
+#define MQTT_PUB_TEMP_LUX "iot/temp_lux"
 
 static QueueHandle_t uart0_queue;
 float LM35_temp = 0;
@@ -65,7 +66,7 @@ void publisher_task(void *pvParameter)
 
         if((read_new_temp == true) && (read_new_light == true)){
             sprintf(pub_temp_lux, "{\"temp\": %.2f, \"lux\": %.2f}\n ", read_temp, read_light);
-            mqtt_publish(pub_temp_lux);
+            mqtt_publish(pub_temp_lux, MQTT_PUB_TEMP_LUX);
             read_new_temp = false;
             read_new_light = false;
         }

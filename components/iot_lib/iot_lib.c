@@ -11,8 +11,6 @@
 #include "nvs.h"
 
 #define MAX_RETRY 10
-#define MQTT_BROKER_URI "mqtt://192.168.120.32:1883"//"mqtt://192.168.1.6:1883"
-#define MQTT_PUB_TEMP_LUX "iot/temp_lux"
 #define MAX_TOPICS 10
 #define MAX_TOPICS_LEN 15
 #define MAX_URI_LEN 50
@@ -227,17 +225,17 @@ static void mqtt_app_start(void)
 {
     printf("STARTING MQTT\n");
     esp_mqtt_client_config_t mqttConfig = {
-        .uri = mqtt_uri};//MQTT_BROKER_URI};
+        .uri = mqtt_uri};
     client = esp_mqtt_client_init(&mqttConfig);
     esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, mqtt_event_handler, client);
     esp_mqtt_client_start(client);
 }
 
-void mqtt_publish(const char *data)
+void mqtt_publish(const char * data, const char * pub_topic)
 {
     if (MQTT_CONNECTED){
         printf("MQTT_PUB:%s\n", data);
-        esp_mqtt_client_publish(client, MQTT_PUB_TEMP_LUX, data, 0, 0, 0);
+        esp_mqtt_client_publish(client, pub_topic, data, 0, 0, 0);
     }
 }
 
