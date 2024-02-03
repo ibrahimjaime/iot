@@ -165,7 +165,7 @@ void app_main()
     nvs_flash_init();
     
     iot_dgt_setup(topics, storage_nsp, ports, out_num);
-    iot_pwm_setup(pwm_topic, storage_nsp, MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM0A, GPIO_PWM0A_OUT, pwm_freq);
+    iot_pwm_setup(pwm_topic, storage_nsp, MCPWM_UNIT_0, MCPWM_OPR_A, MCPWM_TIMER_0, MCPWM0A, GPIO_PWM0A_OUT, pwm_freq);
     iot_init(ssid, pass, uri);
 
     temp_key = xSemaphoreCreateMutex();

@@ -5,8 +5,6 @@
 #include "nvs_flash.h"
 #include "nvs.h"
 
-mcpwm_unit_t mcpwm_num;
-mcpwm_timer_t timer_num;
 bool pwm_init = false;
 
 /**
@@ -15,16 +13,17 @@ bool pwm_init = false;
  * @param mcpwm_num new_mcpwm_num : Unidad MCPWM empleada. 
  * @param timer_num new_timer_num : Timer usado como referencia.
  * @param mcpwm_io_signals_t io_signal : Señal de salida de unidad MCPWM.
+ * @param int freq : Frecuencia de la señal PWM.
  * @param int gpio_num: Puerto de salida de la señal PWM.
+ * @param const char* storage_name : nombre de espacio en flash.
+ * @param const char* storage_key : nombre de clave en flash.
  * 
  * @par Returns
  *    Nothing.
  */
-void pwm_setup(mcpwm_unit_t new_mcpwm_num,  mcpwm_timer_t new_timer_num, mcpwm_io_signals_t io_signal, int freq, int gpio_num, const char * storage_name, const char * storage_key)
-{   
-    mcpwm_num = new_mcpwm_num;
-    timer_num = new_timer_num;
-    mcpwm_gpio_init(mcpwm_num, io_signal, gpio_num);
+void pwm_setup(mcpwm_unit_t new_mcpwm_num,  mcpwm_timer_t new_timer_num, mcpwm_generator_t gen, mcpwm_io_signals_t io_signal, int freq, int gpio_num, const char * storage_name, const char * storage_key)
+{
+    mcpwm_gpio_init(new_mcpwm_num, io_signal, gpio_num);
     mcpwm_config_t pwm_config;
     pwm_config.frequency = freq;
     pwm_config.cmpr_a = 0;    //duty cycle of PWMxA = 0
@@ -42,10 +41,10 @@ void pwm_setup(mcpwm_unit_t new_mcpwm_num,  mcpwm_timer_t new_timer_num, mcpwm_i
     nvs_close(storage_handler);
     if (nvs_err != ESP_OK) {
         printf("Error (%s) opening NVS handle, setting pwm duty = 0\n", esp_err_to_name(nvs_err));
-        change_pwm_duty(0);
+        change_pwm_duty(new_mcpwm_num, new_timer_num, gen,0);
     }
     else {
-        change_pwm_duty(pwm_stored_value);
+        change_pwm_duty(new_mcpwm_num, new_timer_num, gen, pwm_stored_value);
     }
 }
 
@@ -78,12 +77,12 @@ int8_t convert_pwm_duty(int8_t pwm_duty)
  * @par Returns
  *    Nothing.
  */
-void change_pwm_duty(int8_t duty_cycle)
+void change_pwm_duty(mcpwm_unit_t mcpwm_num, mcpwm_timer_t timer_num, mcpwm_generator_t gen, int8_t duty_cycle)
 {
     if(pwm_init){
         duty_cycle = convert_pwm_duty(duty_cycle);
-        mcpwm_set_duty(mcpwm_num, timer_num, MCPWM_OPR_A, duty_cycle);
-        mcpwm_set_duty_type(mcpwm_num, timer_num, MCPWM_OPR_A, MCPWM_DUTY_MODE_0);
+        mcpwm_set_duty(mcpwm_num, timer_num, gen, duty_cycle);
+        mcpwm_set_duty_type(mcpwm_num, timer_num, gen, MCPWM_DUTY_MODE_0);
     }
     else{
         printf("ERROR: Configure PWM before setting duty cycle\n");

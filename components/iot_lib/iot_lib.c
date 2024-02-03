@@ -24,7 +24,10 @@ int8_t ports_status[MAX_TOPICS];
 char nvs_namespace[MAX_TOPICS][MAX_TOPICS_LEN];
 char pwm_nvs_namespace[MAX_TOPICS][MAX_TOPICS_LEN];
 char mqtt_uri[MAX_URI_LEN];
-
+mcpwm_unit_t mcpwm_num[MAX_TOPICS];
+mcpwm_timer_t timer_num[MAX_TOPICS];
+mcpwm_generator_t pwm_operator[MAX_TOPICS];
+mcpwm_io_signals_t io_signals[MAX_TOPICS];
 static int retry_cnt = 0;
 uint32_t MQTT_CONNECTED = 0;
 int8_t light0_status;
@@ -76,11 +79,14 @@ void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id
 
 /**
  * @brief Inicialización de WiFi
- *
+ * @param const char * conf_wifi_ssid : ID de WiFi.
+ * @param const char * conf_wifi_pass : Contraseña de WiFi.
+ * @param const char * conf_uri : URI del Broker MQTT.
+ * 
  * @par Returns
  *    Nothing.
  */
-void iot_init(const char * conf_wifi_ssid, const char * conf_wifi_pass, const char *conf_uri){
+void iot_init(const char * conf_wifi_ssid, const char * conf_wifi_pass, const char * conf_uri){
     strcpy(mqtt_uri, conf_uri);
     esp_event_loop_create_default();
     esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL);
@@ -187,7 +193,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
                     new_pwm_duty = atoi(event->data);
                     if(new_pwm_duty != pwm_duty)
                     {
-                        change_pwm_duty(new_pwm_duty);
+                        change_pwm_duty(mcpwm_num[i], timer_num[i], pwm_operator[i], new_pwm_duty);
                         pwm_duty = new_pwm_duty;
                         nvs_err = nvs_open(pwm_nvs_namespace[i], NVS_READWRITE, &storage_handler);
                         if (nvs_err != ESP_OK) {
@@ -231,6 +237,14 @@ static void mqtt_app_start(void)
     esp_mqtt_client_start(client);
 }
 
+/**
+ * @brief Publica datos por MQTT.
+ * @param const char * data : Datos a publicar.
+ * @param const char * pub_topic : Topico al cual se va a publicar.
+ * 
+ * @par Returns
+ *    Nothing.
+ */
 void mqtt_publish(const char * data, const char * pub_topic)
 {
     if (MQTT_CONNECTED){
@@ -239,7 +253,17 @@ void mqtt_publish(const char * data, const char * pub_topic)
     }
 }
 
-void iot_dgt_setup(char **new_topics, char * storage_name, int ports[],int out_num){
+/**
+ * @brief Inicialización de salidas digitales.
+ * @param char **new_topics : Arreglo de tópicos MQTT.
+ * @param char * storage_name : 
+ * @param int ports[] : Arreglo de puertos para cada tópico.
+ * @param  int out_num : Numero de tópico.
+ * 
+ * @par Returns
+ *    Nothing.
+ */
+void iot_dgt_setup(char **new_topics, char * storage_name, int ports[], int out_num){
     topics_num += out_num;
     for (int i = 0; i < out_num; i++){
         strncpy(nvs_namespace[i], storage_name, strlen(storage_name)+1);
@@ -270,9 +294,28 @@ void iot_dgt_setup(char **new_topics, char * storage_name, int ports[],int out_n
     nvs_close(storage_handler);
 }
 
-void iot_pwm_setup(char * new_pwm_topic, char * storage_name, mcpwm_unit_t new_mcpwm_num,  mcpwm_timer_t new_timer_num, mcpwm_io_signals_t io_signal, int gpio_num, int freq){
+/**
+ * @brief Inicialización de pwm.
+ * @param char* storage_name : nombre de espacio en flash.
+ * @param char* new_pwm_topic : Tópico para recibir ancho de pulso por MQTT.
+ * @param mcpwm_num new_mcpwm_num : Unidad MCPWM empleada. 
+ * @param timer_num new_timer_num : Timer usado como referencia.
+ * @param mcpwm_io_signals_t io_signal : Señal de salida de unidad MCPWM.
+ * @param int freq : Frecuencia de la señal PWM.
+ * @param int gpio_num: Puerto de salida de la señal PWM.
+ * @param const char* storage_name : nombre de espacio en flash.
+ * @param const char* storage_key : nombre de clave en flash.
+ * 
+ * @par Returns
+ *    Nothing.
+ */
+void iot_pwm_setup(char * new_pwm_topic, char * storage_name, mcpwm_unit_t new_mcpwm_num,  mcpwm_generator_t new_pwm_operator, mcpwm_timer_t new_timer_num, mcpwm_io_signals_t io_signal, int gpio_num, int freq){
     pwm_topics_num += 1;
     strncpy(pwm_nvs_namespace[pwm_topics_num-1], storage_name, strlen(storage_name)+1);
     strncpy(pwm_topics[pwm_topics_num-1], new_pwm_topic, strlen(new_pwm_topic)+1);
-    pwm_setup(new_mcpwm_num, new_timer_num, io_signal, freq, gpio_num, storage_name, new_pwm_topic);
+    mcpwm_num[pwm_topics_num-1] = new_mcpwm_num;
+    timer_num[pwm_topics_num-1] = new_timer_num;
+    pwm_operator[pwm_topics_num-1] = new_pwm_operator;
+    io_signals[pwm_topics_num-1] = io_signal;
+    pwm_setup(new_mcpwm_num, new_timer_num, new_pwm_operator,io_signal, freq, gpio_num, storage_name, new_pwm_topic);
 }
