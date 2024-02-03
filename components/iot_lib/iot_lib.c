@@ -43,7 +43,7 @@ esp_mqtt_client_handle_t client = NULL;
  * @return 
  *  - Código de error.
  */
-void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
+static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
     switch (event_id)
     {

@@ -125,13 +125,14 @@ static void LM35_reader(void *arg)
     }
     float LM35_volt = 0; //Lectura del ADC en volts
     float LM35_raw = 0; //Temperatura del sensor antes del filtro
+    float LM35_Offset = 10; //Off set
     adc1_config_width(ADC_WIDTH_BIT_DEFAULT);
     adc1_config_channel_atten(ADC1_CHANNEL_5, ADC_ATTEN_DB_11);
     TickType_t xLastWakeTime2 = xTaskGetTickCount();
     while (1) 
     {
-        LM35_volt = ((adc1_get_raw(ADC1_CHANNEL_5)*3.3)/4095)+0.05;
-        LM35_raw = (LM35_volt/0.01)+4.7;
+        LM35_volt = ((adc1_get_raw(ADC1_CHANNEL_5)*3.3)/4095);
+        LM35_raw = (LM35_volt/0.01)+LM35_Offset;
         MovingAvarageFilter(temppoint,tempdata,LM35_raw); //Aplicacion del Filtro de media movil
         if(temp_key != NULL){
             if(xSemaphoreTake(temp_key, pdMS_TO_TICKS(100))){ //Si no está tomado el semaforo cambia la variable

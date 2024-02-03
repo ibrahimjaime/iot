@@ -58,7 +58,7 @@ void pwm_setup(mcpwm_unit_t new_mcpwm_num,  mcpwm_timer_t new_timer_num, mcpwm_g
  * @return 
  *  - new_pwm_duty : ancho de pulso convertido.
  */
-int8_t convert_pwm_duty(int8_t pwm_duty)
+static int8_t convert_pwm_duty(int8_t pwm_duty)
 {
     int8_t new_pwm_duty = 0;
     new_pwm_duty = 100 - pwm_duty;
