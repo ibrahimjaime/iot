@@ -30,10 +30,13 @@
 #define MAX_TOPICS_LEN 15
 
 char topics[MAX_TOPICS][MAX_TOPICS_LEN] = {{0}};
+char pwm_topics[MAX_TOPICS][MAX_TOPICS_LEN] = {{0}};
 int out_ports[MAX_TOPICS];
-int subtopic_num;
+int topics_num = 0;
+int pwm_topics_num = 0;
 int8_t ports_status[MAX_TOPICS];
 char nvs_namespace[MAX_TOPICS_LEN];
+char pwm_nvs_namespace[MAX_TOPICS_LEN];
 
 static int retry_cnt = 0;
 uint32_t MQTT_CONNECTED = 0;
@@ -138,9 +141,14 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         case MQTT_EVENT_CONNECTED:
             printf("MQTT_EVENT_CONNECTED\n");
             MQTT_CONNECTED = 1;
-            for (int i = 0; i < subtopic_num; i++){
+            for (int i = 0; i < topics_num; i++){
                 msg_id = esp_mqtt_client_subscribe(client, topics[i], 0);
                 printf("topic: %s\n", topics[i]);
+                printf("sent subscribe successful, msg_id=%d\n", msg_id);
+            }
+            for (int i = 0; i < pwm_topics_num; i++){
+                msg_id = esp_mqtt_client_subscribe(client, pwm_topics[i], 0);
+                printf("topic: %s\n", pwm_topics[i]);
                 printf("sent subscribe successful, msg_id=%d\n", msg_id);
             }
             break;
@@ -171,99 +179,51 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
             sub_topic_len = event->topic_len - (MQTT_TOPYC_LEN + 1);
             strncpy(topic_received, event->topic+(MQTT_TOPYC_LEN + 1), sub_topic_len);
 
-            if(0 == strcmp("light0", topic_received)){
-                if(0 == strcmp("true", event->data)){
-                    gpio_set_level(LIGHT_GPIO, 1);
-                    light0_status = 1;
-                }else{
-                    gpio_set_level(LIGHT_GPIO, 0);
-                    light0_status = 0;
-                }
-                nvs_err = nvs_open("storage", NVS_READWRITE, &storage_handler);
-                if (nvs_err != ESP_OK) {
-                    printf("Error (%s) opening NVS handle!\n", esp_err_to_name(nvs_err));
-                }
-                nvs_err = nvs_set_i8(storage_handler, topics[0], light0_status);
-                printf((nvs_err != ESP_OK) ? "NVS Set Failed!\n" : "NVS Set Done\n");
-                nvs_err = nvs_commit(storage_handler);
-                printf((nvs_err != ESP_OK) ? "NVS Commit Failed!\n" : "NVS Commit Done\n");
-                nvs_close(storage_handler);
-            }
-            else if(0 == strcmp("light1", topic_received)){
-                if(0 == strcmp("true", event->data)){
-                    gpio_set_level(LIGHT_GPIO_1, 1);
-                    light1_status = 1;
-                }else{
-                    gpio_set_level(LIGHT_GPIO_1, 0);
-                    light1_status = 0;
-                }
-                nvs_err = nvs_open("storage", NVS_READWRITE, &storage_handler);
-                if (nvs_err != ESP_OK) {
-                    printf("Error (%s) opening NVS handle!\n", esp_err_to_name(nvs_err));
-                }
-                nvs_err = nvs_set_i8(storage_handler, topics[1], light1_status);
-                printf((nvs_err != ESP_OK) ? "NVS Set Failed!\n" : "NVS Set Done\n");
-                nvs_err = nvs_commit(storage_handler);
-                printf((nvs_err != ESP_OK) ? "NVS Commit Failed!\n" : "NVS Commit Done\n");
-                nvs_close(storage_handler);                
-            }
-            else if(0 == strcmp("light2", topic_received)){
-                if(0 == strcmp("true", event->data)){
-                    gpio_set_level(LIGHT_GPIO_2, 1);
-                    light2_status = 1;
-                }else{
-                    gpio_set_level(LIGHT_GPIO_2, 0);
-                    light2_status = 0;              
-                }
-                nvs_err = nvs_open("storage", NVS_READWRITE, &storage_handler);
-                if (nvs_err != ESP_OK) {
-                    printf("Error (%s) opening NVS handle!\n", esp_err_to_name(nvs_err));
-                }
-                nvs_err = nvs_set_i8(storage_handler, topics[2], light2_status);
-                printf((nvs_err != ESP_OK) ? "NVS Set Failed!\n" : "NVS Set Done\n");
-                nvs_err = nvs_commit(storage_handler);
-                printf((nvs_err != ESP_OK) ? "NVS Commit Failed!\n" : "NVS Commit Done\n");
-                nvs_close(storage_handler);
-            }
-            else if(0 == strcmp("light3", topic_received)){
-                if(0 == strcmp("true", event->data)){
-                    gpio_set_level(LIGHT_GPIO_3, 1);
-                    light3_status = 1;                 
-                }else{
-                    gpio_set_level(LIGHT_GPIO_3, 0);
-                    light3_status = 0;
-                }
-                nvs_err = nvs_open("storage", NVS_READWRITE, &storage_handler);
-                if (nvs_err != ESP_OK) {
-                    printf("Error (%s) opening NVS handle!\n", esp_err_to_name(nvs_err));
-                }
-                nvs_err = nvs_set_i8(storage_handler, topics[3], light3_status);
-                printf((nvs_err != ESP_OK) ? "NVS Set Failed!\n" : "NVS Set Done\n");
-                nvs_err = nvs_commit(storage_handler);
-                printf((nvs_err != ESP_OK) ? "NVS Commit Failed!\n" : "NVS Commit Done\n");
-                nvs_close(storage_handler);
-            }
-            else if(0 == strcmp("pwm0", topic_received)){
-                new_pwm_duty = atoi(event->data);
-                if(new_pwm_duty != pwm_duty)
-                {
-                    change_pwm_duty(new_pwm_duty);
-                    pwm_duty = new_pwm_duty;
+            for (int i = 0; i < topics_num; i++){
+                if(strstr(event->topic, topics[i]) != NULL){
+                    if(0 == strcmp("true", event->data)){
+                        gpio_set_level(out_ports[i], 1);
+                        ports_status[i] = 1;
+                    }else{
+                        gpio_set_level(out_ports[i], 0);
+                        ports_status[i] = 0;
+                    }
                     nvs_err = nvs_open("storage", NVS_READWRITE, &storage_handler);
                     if (nvs_err != ESP_OK) {
                         printf("Error (%s) opening NVS handle!\n", esp_err_to_name(nvs_err));
-                    }  
-                    nvs_err = nvs_set_i8(storage_handler, "pwm0", new_pwm_duty);
+                    }
+                    nvs_err = nvs_set_i8(storage_handler, topics[i], ports_status[i]);
                     printf((nvs_err != ESP_OK) ? "NVS Set Failed!\n" : "NVS Set Done\n");
                     nvs_err = nvs_commit(storage_handler);
                     printf((nvs_err != ESP_OK) ? "NVS Commit Failed!\n" : "NVS Commit Done\n");
                     nvs_close(storage_handler);
+                    memset(event->data,0, event->data_len);
+                    return;
                 }
             }
-            else{
-                printf("Topic not mached!\n");           
+            for (int i = 0; i < pwm_topics_num; i++){
+                if(strstr(event->topic, pwm_topics[i]) != NULL){
+                    new_pwm_duty = atoi(event->data);
+                    if(new_pwm_duty != pwm_duty)
+                    {
+                        change_pwm_duty(new_pwm_duty);
+                        pwm_duty = new_pwm_duty;
+                        nvs_err = nvs_open("storage", NVS_READWRITE, &storage_handler);
+                        if (nvs_err != ESP_OK) {
+                            printf("Error (%s) opening NVS handle!\n", esp_err_to_name(nvs_err));
+                        }  
+                        nvs_err = nvs_set_i8(storage_handler, pwm_topics[i], new_pwm_duty);
+                        printf((nvs_err != ESP_OK) ? "NVS Set Failed!\n" : "NVS Set Done\n");
+                        nvs_err = nvs_commit(storage_handler);
+                        printf((nvs_err != ESP_OK) ? "NVS Commit Failed!\n" : "NVS Commit Done\n");
+                        nvs_close(storage_handler);
+                    }
+                    memset(event->data,0, event->data_len);
+                    return;
+                }
             }
             memset(event->data,0, event->data_len);
+            printf("Topic not mached!\n");
             break;
         case MQTT_EVENT_ERROR:
             printf("MQTT_EVENT_ERROR");
@@ -300,7 +260,7 @@ void mqtt_publish(const char *data)
 }
 
 void iot_dgt_setup(char **new_topics, char * storage_name, int ports[],int out_num){
-    subtopic_num += out_num;
+    topics_num += out_num;
     strncpy(nvs_namespace, storage_name, strlen(storage_name)+1);
     for (int i = 0; i < out_num; i++){
       strncpy(topics[i],new_topics[i], strlen(new_topics[i])+1);
@@ -328,4 +288,11 @@ void iot_dgt_setup(char **new_topics, char * storage_name, int ports[],int out_n
         }
     }
     nvs_close(storage_handler);
+}
+
+void iot_pwm_setup(char * new_pwm_topic, char * storage_name, mcpwm_unit_t new_mcpwm_num,  mcpwm_timer_t new_timer_num, mcpwm_io_signals_t io_signal, int gpio_num){
+    pwm_topics_num += 1;
+    strncpy(pwm_nvs_namespace, storage_name, strlen(storage_name)+1);
+    strncpy(pwm_topics[pwm_topics_num-1], new_pwm_topic, strlen(new_pwm_topic)+1);
+    pwm_setup(new_mcpwm_num, new_timer_num, io_signal, gpio_num, storage_name, new_pwm_topic);
 }

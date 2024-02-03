@@ -143,6 +143,7 @@ void app_main()
     topics[2]="iot/light2";
     topics[3]="iot/light3";
     char storage_nsp[] = "storage";
+    char pwm_topic[] = "iot/pwm0";
     int ports[] = {19, 18, 5, 17};
     int out_num = 4;
 
@@ -157,10 +158,9 @@ void app_main()
     uart_param_config(EX_UART_NUM, &uart_config);
     
     nvs_flash_init();
-    pwm_setup(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM0A, GPIO_PWM0A_OUT, "storage", "pwm0");
     
     iot_dgt_setup(topics, storage_nsp, ports, out_num);
-    //iot_pwm_setup();
+    iot_pwm_setup(pwm_topic, storage_nsp, MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM0A, GPIO_PWM0A_OUT);
     //iot_init();
     wifi_init();
 
