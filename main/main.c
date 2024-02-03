@@ -26,6 +26,7 @@
 #define BUF_SIZE (1024)
 #define RD_BUF_SIZE (BUF_SIZE)
 #define GPIO_PWM0A_OUT 15
+#define MQTT_PUB_TEMP_LUX "iot/temp_lux"
 
 static QueueHandle_t uart0_queue;
 float LM35_temp = 0;
@@ -65,7 +66,7 @@ void publisher_task(void *pvParameter)
 
         if((read_new_temp == true) && (read_new_light == true)){
             sprintf(pub_temp_lux, "{\"temp\": %.2f, \"lux\": %.2f}\n ", read_temp, read_light);
-            mqtt_publish(pub_temp_lux);
+            mqtt_publish(pub_temp_lux, MQTT_PUB_TEMP_LUX);
             read_new_temp = false;
             read_new_light = false;
         }
@@ -137,6 +138,20 @@ static void LM35_reader(void *arg)
  */
 void app_main()
 {   
+    char *topics[4]={'\0'};
+    topics[0]="iot/light0";
+    topics[1]="iot/light1";
+    topics[2]="iot/light2";
+    topics[3]="iot/light3";
+    char storage_nsp[] = "storage";
+    char pwm_topic[] = "iot/pwm0";
+    int pwm_freq = 50000;
+    int ports[] = {19, 18, 5, 17};
+    int out_num = 4;
+    const char *ssid = "brinet715";//"millokira"//"fabriwifi"//"Utn_WifiPass"
+    const char *pass = "03829f50";//"rocki2021"//"iotproject"//"WifiPass**"
+    const char *uri = "mqtt://192.168.120.32:1883";//"mqtt://192.168.1.6:1883"
+
     uart_config_t uart_config = {
         .baud_rate = 115200,
         .data_bits = UART_DATA_8_BITS,
@@ -144,13 +159,15 @@ void app_main()
         .stop_bits = UART_STOP_BITS_1,
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE
     };
-    
     uart_driver_install(EX_UART_NUM, BUF_SIZE * 2, BUF_SIZE * 2, 20, &uart0_queue, 0);
     uart_param_config(EX_UART_NUM, &uart_config);
-	nvs_flash_init();
-    pwm_setup(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM0A, GPIO_PWM0A_OUT, "storage", "pwm0");
-    iot_gpio_init();
-    wifi_init();
+    
+    nvs_flash_init();
+    
+    iot_dgt_setup(topics, storage_nsp, ports, out_num);
+    iot_pwm_setup(pwm_topic, storage_nsp, MCPWM_UNIT_0, MCPWM_OPR_A, MCPWM_TIMER_0, MCPWM0A, GPIO_PWM0A_OUT, pwm_freq);
+    iot_init(ssid, pass, uri);
+
     temp_key = xSemaphoreCreateMutex();
     light_key = xSemaphoreCreateMutex();
     xTaskCreate(LDR_reader, "LDR_reader", 4096, NULL, 5, NULL);
