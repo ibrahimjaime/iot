@@ -97,6 +97,7 @@ static void LDR_reader(void *arg)
         Vref = ((adc1_get_raw(ADC1_CHANNEL_4)*3.3)/4095);
         LDR = (3.3-Vref)/(Vref/Rref);
         lux_raw = pow(50000*pow(10,GAMMA)/LDR,(1/GAMMA));
+        MovingAvarageFilter(luxespoint,luxesdata,lux_raw); //Aplicacion del Filtro de media movil
         if(light_key != NULL){
             if(xSemaphoreTake(light_key, pdMS_TO_TICKS(100))){
                 lux = luxes.MovAvrResult;
